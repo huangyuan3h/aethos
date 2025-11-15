@@ -1,5 +1,6 @@
 import { OnboardingWizard } from '@/features/onboarding/components/OnboardingWizard'
 import { SettingsPanel } from '@/features/settings/components/SettingsPanel'
+import { ChatScreen } from '@/features/chat/components/ChatScreen'
 import { useSettingsStore } from '@/features/settings/state/settings.store'
 import { Button } from '@/components/ui/button'
 
@@ -35,9 +36,9 @@ export default function App() {
           </Button>
         </header>
 
-        <section className="flex flex-1 flex-col gap-4 rounded-2xl border bg-card/50 p-6 backdrop-blur">
+        <section className="flex flex-1 flex-col gap-4">
           {onboardingNeeded ? (
-            <>
+            <div className="rounded-2xl border bg-card/50 p-6 backdrop-blur">
               <div className="space-y-2">
                 <h2 className="text-lg font-semibold">You're almost there</h2>
                 <p className="text-sm text-muted-foreground">
@@ -46,21 +47,14 @@ export default function App() {
                 </p>
               </div>
               <Button
-                className="w-fit"
+                className="mt-4 w-fit"
                 onClick={openSettings}
               >
                 Configure provider
               </Button>
-            </>
+            </div>
           ) : (
-            <>
-              <h2 className="text-lg font-semibold">Next steps</h2>
-              <ul className="list-disc space-y-1 pl-6 text-sm text-muted-foreground">
-                <li>Finish chat engine wiring + secure key routing.</li>
-                <li>Connect MCP servers and schedule background tasks.</li>
-                <li>Design the multi-pane conversation interface.</li>
-              </ul>
-            </>
+            <ChatScreen />
           )}
         </section>
       </main>
