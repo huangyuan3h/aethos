@@ -10,18 +10,20 @@ interface PreferencesState {
   language?: LanguageOption
   theme?: ThemeOption
   isLoaded: boolean
+  needsSetup: boolean
   error?: string
   fetchPreferences: () => Promise<void>
   savePreferences: (input: { language: LanguageOption; theme: ThemeOption }) => Promise<void>
   applyLanguage: (language: LanguageOption) => void
   applyTheme: (theme: ThemeOption) => void
-  needsPreferences: () => boolean
+  markSetupComplete: () => void
 }
 
 export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   language: undefined,
   theme: undefined,
   isLoaded: false,
+  needsSetup: true,
   async fetchPreferences() {
     try {
       const response = await invoke<{ preferences: { language?: string; theme?: string } }>(
@@ -29,7 +31,12 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       )
       const language = (response.preferences.language as LanguageOption | undefined) ?? undefined
       const theme = (response.preferences.theme as ThemeOption | undefined) ?? undefined
-      set({ language, theme, isLoaded: true })
+      set({
+        language,
+        theme,
+        isLoaded: true,
+        needsSetup: !language || !theme,
+      })
       if (language) {
         get().applyLanguage(language)
       }
@@ -37,14 +44,14 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
         get().applyTheme(theme)
       }
     } catch (error) {
-      set({ error: (error as Error).message, isLoaded: true })
+      set({ error: (error as Error).message, isLoaded: true, needsSetup: true })
     }
   },
   async savePreferences({ language, theme }) {
     await invoke('save_preferences', {
       update: { language, theme },
     })
-    set({ language, theme })
+    set({ language, theme, needsSetup: false })
     get().applyLanguage(language)
     get().applyTheme(theme)
   },
@@ -55,9 +62,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   applyTheme(theme) {
     applyThemeClass(theme)
   },
-  needsPreferences() {
-    const state = get()
-    return !state.language || !state.theme
+  markSetupComplete() {
+    set({ needsSetup: false })
   },
 }))
-

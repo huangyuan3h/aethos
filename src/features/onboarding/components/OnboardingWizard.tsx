@@ -23,7 +23,7 @@ export function OnboardingWizard() {
   const preferencesLoaded = usePreferencesStore((state) => state.isLoaded)
   const settingsLoaded = useSettingsStore((state) => state.isLoaded)
   const onboardingNeeded = useSettingsStore((state) => state.onboardingNeeded)
-  const needsPreferences = usePreferencesStore((state) => state.needsPreferences)()
+  const needsPreferences = usePreferencesStore((state) => state.needsSetup)
 
   const [step, setStep] = useState(0)
   const [language, setLanguage] = useState<'en' | 'zh-CN'>('en')

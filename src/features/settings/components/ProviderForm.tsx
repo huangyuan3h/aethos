@@ -16,6 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useOnboardingStore } from '@/features/onboarding/state/onboarding.store'
+import { usePreferencesStore } from '@/features/preferences/state/preferences.store'
 
 const schema = z.object({
   provider: z.enum(['openai', 'openrouter', 'anthropic', 'google']),
@@ -36,6 +38,8 @@ export function ProviderForm({ onSuccess, variant = 'default' }: ProviderFormPro
   const saveProvider = useSettingsStore((state) => state.saveProvider)
   const isLoading = useSettingsStore((state) => state.isLoading)
   const providers = useSettingsStore((state) => state.providers)
+  const closeOnboarding = useOnboardingStore((state) => state.close)
+  const markSetupComplete = usePreferencesStore((state) => state.markSetupComplete)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -47,6 +51,10 @@ export function ProviderForm({ onSuccess, variant = 'default' }: ProviderFormPro
       makeDefault: providers.length === 0,
     },
   })
+
+  useEffect(() => {
+    form.register('provider')
+  }, [form])
 
   const [selectedProvider, setSelectedProvider] =
     useState<FormValues['provider']>(form.getValues('provider'))
@@ -75,14 +83,15 @@ export function ProviderForm({ onSuccess, variant = 'default' }: ProviderFormPro
       makeDefault: false,
     })
     setSelectedProvider(values.provider)
+    markSetupComplete()
+    closeOnboarding()
     onSuccess?.()
   }
 
+  const handleSave = form.handleSubmit(onSubmit)
+
   return (
-    <form
-      className="space-y-4"
-      onSubmit={form.handleSubmit(onSubmit)}
-    >
+    <div className="space-y-4">
       <div className="space-y-1">
         <label className="text-sm font-medium text-foreground">Provider</label>
         <Select
@@ -154,11 +163,12 @@ export function ProviderForm({ onSuccess, variant = 'default' }: ProviderFormPro
       <Button
         className="w-full"
         disabled={isLoading}
-        type="submit"
+        type="button"
+        onClick={handleSave}
       >
         {isLoading ? 'Saving...' : 'Save provider'}
       </Button>
-    </form>
+    </div>
   )
 }
 
