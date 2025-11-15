@@ -33,7 +33,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         providers: items,
         isLoading: false,
         onboardingNeeded,
-        isSettingsOpen: onboardingNeeded || get().isSettingsOpen,
+        isSettingsOpen: onboardingNeeded ? false : get().isSettingsOpen,
         isLoaded: true,
       })
     } catch (error) {
