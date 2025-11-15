@@ -22,6 +22,8 @@ pub enum ConfigError {
     Utf8(#[from] std::string::FromUtf8Error),
     #[error("task join error: {0}")]
     Join(#[from] tokio::task::JoinError),
+    #[error("json error: {0}")]
+    Json(#[from] serde_json::Error),
 }
 
 impl From<ring::error::Unspecified> for ConfigError {

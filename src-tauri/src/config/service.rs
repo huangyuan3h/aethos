@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sqlx::{FromRow, Row};
 use tracing::{info, instrument};
 
@@ -93,6 +94,93 @@ pub struct ConversationMessage {
     pub role: String,
     pub content: String,
     pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct McpSource {
+    pub id: i64,
+    pub slug: String,
+    pub name: String,
+    pub kind: String,
+    pub endpoint: Option<String>,
+    pub priority: i64,
+    pub last_synced_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpSourceUpsert {
+    pub slug: String,
+    pub name: String,
+    pub kind: Option<String>,
+    pub endpoint: Option<String>,
+    pub priority: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct McpRegistryEntry {
+    pub id: i64,
+    pub slug: String,
+    pub name: String,
+    pub version: String,
+    pub summary: Option<String>,
+    pub author: Option<String>,
+    pub homepage: Option<String>,
+    pub tags: Option<String>,
+    pub manifest: String,
+    pub checksum: Option<String>,
+    pub source_slug: Option<String>,
+    pub synced_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpRegistryUpsert {
+    pub slug: String,
+    pub name: String,
+    pub version: String,
+    pub summary: Option<String>,
+    pub author: Option<String>,
+    pub homepage: Option<String>,
+    pub tags: Option<Vec<String>>,
+    pub manifest: Value,
+    pub checksum: Option<String>,
+    pub source_slug: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct McpServerSummary {
+    pub id: i64,
+    pub slug: String,
+    pub name: String,
+    pub installed_version: Option<String>,
+    pub status: String,
+    pub install_path: Option<String>,
+    pub auto_start: bool,
+    pub config: Option<String>,
+    pub last_health_check: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpServerUpsert {
+    pub slug: String,
+    pub name: String,
+    pub installed_version: Option<String>,
+    pub status: Option<String>,
+    pub install_path: Option<String>,
+    pub auto_start: Option<bool>,
+    pub config: Option<Value>,
+    pub secrets: Option<Value>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -497,6 +585,236 @@ impl ConfigService {
         }
         let rows = sql.fetch_all(&self.pool).await?;
         Ok(rows)
+    }
+
+    pub async fn list_mcp_sources(&self) -> Result<Vec<McpSource>, ConfigError> {
+        let rows = sqlx::query_as::<_, McpSource>(
+            r#"
+        SELECT id, slug, name, kind, endpoint, priority, last_synced_at, created_at, updated_at
+        FROM mcp_sources
+        ORDER BY priority ASC, name COLLATE NOCASE ASC
+      "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    pub async fn upsert_mcp_source(
+        &self,
+        payload: McpSourceUpsert,
+    ) -> Result<McpSource, ConfigError> {
+        sqlx::query(
+            r#"
+        INSERT INTO mcp_sources (slug, name, kind, endpoint, priority, updated_at)
+        VALUES (?1, ?2, ?3, ?4, COALESCE(?5, 100), CURRENT_TIMESTAMP)
+        ON CONFLICT(slug) DO UPDATE SET
+          name = excluded.name,
+          kind = excluded.kind,
+          endpoint = excluded.endpoint,
+          priority = excluded.priority,
+          updated_at = CURRENT_TIMESTAMP
+      "#,
+        )
+        .bind(&payload.slug)
+        .bind(&payload.name)
+        .bind(payload.kind.unwrap_or_else(|| "custom".to_string()))
+        .bind(payload.endpoint)
+        .bind(payload.priority.unwrap_or(100))
+        .execute(&self.pool)
+        .await?;
+        let source = sqlx::query_as::<_, McpSource>(
+            r#"
+        SELECT id, slug, name, kind, endpoint, priority, last_synced_at, created_at, updated_at
+        FROM mcp_sources
+        WHERE slug = ?1
+      "#,
+        )
+        .bind(&payload.slug)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(source)
+    }
+
+    pub async fn delete_mcp_source(&self, slug: &str) -> Result<(), ConfigError> {
+        sqlx::query("DELETE FROM mcp_sources WHERE slug = ?1")
+            .bind(slug)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn list_mcp_registry(&self) -> Result<Vec<McpRegistryEntry>, ConfigError> {
+        let rows = sqlx::query_as::<_, McpRegistryEntry>(
+            r#"
+        SELECT
+          id, slug, name, version, summary, author, homepage, tags, manifest,
+          checksum, source_slug, synced_at, created_at, updated_at
+        FROM mcp_registry
+        ORDER BY name COLLATE NOCASE ASC, version DESC
+      "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    pub async fn upsert_mcp_registry_entry(
+        &self,
+        payload: McpRegistryUpsert,
+    ) -> Result<McpRegistryEntry, ConfigError> {
+        let tags = payload.tags.map(|items| items.join(","));
+        let manifest = serde_json::to_string(&payload.manifest)?;
+        sqlx::query(
+            r#"
+        INSERT INTO mcp_registry
+          (slug, name, version, summary, author, homepage, tags, manifest, checksum, source_slug, synced_at, updated_at)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT(slug, version) DO UPDATE SET
+          name = excluded.name,
+          summary = excluded.summary,
+          author = excluded.author,
+          homepage = excluded.homepage,
+          tags = excluded.tags,
+          manifest = excluded.manifest,
+          checksum = excluded.checksum,
+          source_slug = excluded.source_slug,
+          synced_at = excluded.synced_at,
+          updated_at = CURRENT_TIMESTAMP
+      "#,
+        )
+        .bind(&payload.slug)
+        .bind(&payload.name)
+        .bind(&payload.version)
+        .bind(payload.summary)
+        .bind(payload.author)
+        .bind(payload.homepage)
+        .bind(tags)
+        .bind(manifest)
+        .bind(payload.checksum)
+        .bind(payload.source_slug)
+        .execute(&self.pool)
+        .await?;
+
+        let entry = sqlx::query_as::<_, McpRegistryEntry>(
+            r#"
+        SELECT
+          id, slug, name, version, summary, author, homepage, tags, manifest,
+          checksum, source_slug, synced_at, created_at, updated_at
+        FROM mcp_registry
+        WHERE slug = ?1 AND version = ?2
+      "#,
+        )
+        .bind(&payload.slug)
+        .bind(&payload.version)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(entry)
+    }
+
+    pub async fn list_mcp_servers(&self) -> Result<Vec<McpServerSummary>, ConfigError> {
+        let rows = sqlx::query_as::<_, McpServerSummary>(
+            r#"
+        SELECT
+          id, slug, name, installed_version, status, install_path,
+          auto_start, config, last_health_check, created_at, updated_at
+        FROM mcp_servers
+        ORDER BY name COLLATE NOCASE ASC
+      "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    pub async fn upsert_mcp_server(
+        &self,
+        payload: McpServerUpsert,
+    ) -> Result<McpServerSummary, ConfigError> {
+        let config_json = payload
+            .config
+            .map(|value| serde_json::to_string(&value))
+            .transpose()?;
+        let secrets_json = payload
+            .secrets
+            .map(|value| serde_json::to_string(&value))
+            .transpose()?;
+        let encrypted_secrets = if let Some(json) = secrets_json {
+            Some(self.crypto.encrypt(&json)?)
+        } else {
+            None
+        };
+        sqlx::query(
+            r#"
+        INSERT INTO mcp_servers
+          (slug, name, installed_version, status, install_path, auto_start, config, secrets, updated_at)
+        VALUES (?1, ?2, ?3, COALESCE(?4, 'stopped'), ?5, COALESCE(?6, 0), ?7, ?8, CURRENT_TIMESTAMP)
+        ON CONFLICT(slug) DO UPDATE SET
+          name = excluded.name,
+          installed_version = excluded.installed_version,
+          status = excluded.status,
+          install_path = excluded.install_path,
+          auto_start = excluded.auto_start,
+          config = excluded.config,
+          secrets = COALESCE(excluded.secrets, mcp_servers.secrets),
+          updated_at = CURRENT_TIMESTAMP
+      "#,
+        )
+        .bind(&payload.slug)
+        .bind(&payload.name)
+        .bind(payload.installed_version)
+        .bind(payload.status.unwrap_or_else(|| "stopped".into()))
+        .bind(payload.install_path)
+        .bind(payload.auto_start.map(|flag| if flag { 1 } else { 0 }))
+        .bind(config_json)
+        .bind(encrypted_secrets)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_mcp_server(&payload.slug).await
+    }
+
+    async fn get_mcp_server(&self, slug: &str) -> Result<McpServerSummary, ConfigError> {
+        sqlx::query_as::<_, McpServerSummary>(
+            r#"
+        SELECT
+          id, slug, name, installed_version, status, install_path,
+          auto_start, config, last_health_check, created_at, updated_at
+        FROM mcp_servers
+        WHERE slug = ?1
+      "#,
+        )
+        .bind(slug)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(Into::into)
+    }
+
+    pub async fn delete_mcp_server(&self, slug: &str) -> Result<(), ConfigError> {
+        sqlx::query("DELETE FROM mcp_servers WHERE slug = ?1")
+            .bind(slug)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn update_mcp_server_status(
+        &self,
+        slug: &str,
+        status: &str,
+    ) -> Result<McpServerSummary, ConfigError> {
+        sqlx::query(
+            r#"
+        UPDATE mcp_servers
+        SET status = ?1, last_health_check = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+        WHERE slug = ?2
+      "#,
+        )
+        .bind(status)
+        .bind(slug)
+        .execute(&self.pool)
+        .await?;
+        self.get_mcp_server(slug).await
     }
 
     async fn get_provider_by_slug(
