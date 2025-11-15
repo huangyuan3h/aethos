@@ -2,8 +2,10 @@
 
 mod commands;
 mod config;
+mod services;
 
 use commands::{
+    chat::invoke_chat,
     preferences::{get_preferences, save_preferences},
     providers::{has_any_provider, list_providers, set_default_provider, upsert_provider},
 };
@@ -18,6 +20,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_preferences,
             save_preferences,
+            invoke_chat,
             list_providers,
             upsert_provider,
             set_default_provider,

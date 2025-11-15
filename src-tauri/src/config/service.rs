@@ -16,6 +16,7 @@ use super::{
 pub type SharedConfigService = Arc<ConfigService>;
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProviderSummary {
     pub id: i64,
     pub provider: String,
@@ -23,6 +24,13 @@ pub struct ProviderSummary {
     pub default_model: Option<String>,
     pub is_default: bool,
     pub has_api_key: bool,
+}
+
+pub struct ProviderCredential {
+    pub provider: String,
+    pub display_name: String,
+    pub default_model: Option<String>,
+    pub api_key: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -177,6 +185,46 @@ impl ConfigService {
         .fetch_all(&self.pool)
         .await?;
         Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    pub async fn default_provider_credentials(&self) -> Result<ProviderCredential, ConfigError> {
+        let row = sqlx::query(
+            r#"
+        SELECT provider, display_name, default_model, api_key
+        FROM providers
+        WHERE is_default = 1
+        ORDER BY id ASC
+        LIMIT 1
+      "#,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let row = if let Some(row) = row {
+            row
+        } else {
+            sqlx::query(
+                r#"
+            SELECT provider, display_name, default_model, api_key
+            FROM providers
+            ORDER BY id ASC
+            LIMIT 1
+          "#,
+            )
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or(ConfigError::MissingDefaultProvider)?
+        };
+
+        let encrypted_key: String = row.try_get("api_key")?;
+        let api_key = self.crypto.decrypt(&encrypted_key)?;
+
+        Ok(ProviderCredential {
+            provider: row.try_get("provider")?,
+            display_name: row.try_get("display_name")?,
+            default_model: row.try_get("default_model")?,
+            api_key,
+        })
     }
 
     pub async fn upsert_provider(
@@ -366,5 +414,29 @@ mod tests {
         let prefs = service.get_preferences().await.unwrap();
         assert_eq!(prefs.language.as_deref(), Some("zh-CN"));
         assert_eq!(prefs.theme.as_deref(), Some("dark"));
+    }
+
+    #[tokio::test]
+    async fn can_fetch_default_provider_credentials() {
+        let temp_dir = tempdir().unwrap();
+        let paths = ConfigPaths::from_base_dir(temp_dir.path()).unwrap();
+        let service = ConfigService::with_paths(paths).await.unwrap();
+
+        service
+            .upsert_provider(ProviderUpsertPayload {
+                provider: "openai".into(),
+                display_name: "OpenAI".into(),
+                api_key: "sk-secret-123".into(),
+                default_model: Some("gpt-4o-mini".into()),
+                make_default: true,
+            })
+            .await
+            .unwrap();
+
+        let creds = service.default_provider_credentials().await.unwrap();
+        assert_eq!(creds.provider, "openai");
+        assert_eq!(creds.display_name, "OpenAI");
+        assert_eq!(creds.default_model.as_deref(), Some("gpt-4o-mini"));
+        assert_eq!(creds.api_key, "sk-secret-123");
     }
 }

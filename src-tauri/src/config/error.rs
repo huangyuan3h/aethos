@@ -4,6 +4,8 @@ use thiserror::Error;
 pub enum ConfigError {
     #[error("failed to resolve project directory")]
     MissingProjectDir,
+    #[error("no default provider configured")]
+    MissingDefaultProvider,
     #[error("i/o error: {0}")]
     Io(#[from] std::io::Error),
     #[error("database error: {0}")]
