@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Row};
 use tracing::instrument;
@@ -70,6 +71,28 @@ impl From<ProviderRow> for ProviderSummary {
 pub struct UserPreferences {
     pub language: Option<String>,
     pub theme: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationSummary {
+    pub id: String,
+    pub title: String,
+    pub pinned: bool,
+    pub last_message_preview: Option<String>,
+    pub last_message_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationMessage {
+    pub id: String,
+    pub conversation_id: String,
+    pub role: String,
+    pub content: String,
+    pub created_at: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -287,6 +310,194 @@ impl ConfigService {
         Ok(count > 0)
     }
 
+    fn generate_id() -> String {
+        rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(21)
+            .map(char::from)
+            .collect()
+    }
+
+    pub async fn create_conversation(
+        &self,
+        title: Option<String>,
+    ) -> Result<ConversationSummary, ConfigError> {
+        let id = Self::generate_id();
+        let title = title.unwrap_or_else(|| "New chat".to_string());
+        sqlx::query(
+            r#"
+        INSERT INTO conversations (id, title)
+        VALUES (?1, ?2)
+      "#,
+        )
+        .bind(&id)
+        .bind(&title)
+        .execute(&self.pool)
+        .await?;
+        self.get_conversation(&id).await
+    }
+
+    pub async fn get_conversation(&self, id: &str) -> Result<ConversationSummary, ConfigError> {
+        Ok(sqlx::query_as::<_, ConversationSummary>(
+            r#"
+        SELECT
+          id,
+          title,
+          pinned,
+          last_message_preview,
+          last_message_at,
+          created_at,
+          updated_at
+        FROM conversations
+        WHERE id = ?1
+      "#,
+        )
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?)
+    }
+
+    pub async fn list_conversations(&self) -> Result<Vec<ConversationSummary>, ConfigError> {
+        let rows = sqlx::query_as::<_, ConversationSummary>(
+            r#"
+        SELECT
+          id,
+          title,
+          pinned,
+          last_message_preview,
+          last_message_at,
+          created_at,
+          updated_at
+        FROM conversations
+        ORDER BY pinned DESC, COALESCE(last_message_at, updated_at) DESC, created_at DESC
+      "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    pub async fn rename_conversation(
+        &self,
+        id: &str,
+        title: &str,
+    ) -> Result<ConversationSummary, ConfigError> {
+        sqlx::query(
+            r#"
+        UPDATE conversations
+        SET title = ?1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?2
+      "#,
+        )
+        .bind(title)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        self.get_conversation(id).await
+    }
+
+    pub async fn set_conversation_pin(
+        &self,
+        id: &str,
+        pinned: bool,
+    ) -> Result<ConversationSummary, ConfigError> {
+        sqlx::query(
+            r#"
+        UPDATE conversations
+        SET pinned = ?1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?2
+      "#,
+        )
+        .bind(if pinned { 1 } else { 0 })
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        self.get_conversation(id).await
+    }
+
+    pub async fn delete_conversation(&self, id: &str) -> Result<(), ConfigError> {
+        sqlx::query("DELETE FROM conversations WHERE id = ?1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn record_message(
+        &self,
+        conversation_id: &str,
+        role: &str,
+        content: &str,
+    ) -> Result<ConversationMessage, ConfigError> {
+        let message_id = Self::generate_id();
+        let preview = content.chars().take(200).collect::<String>();
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            r#"
+        INSERT INTO messages (id, conversation_id, role, content)
+        VALUES (?1, ?2, ?3, ?4)
+      "#,
+        )
+        .bind(&message_id)
+        .bind(conversation_id)
+        .bind(role)
+        .bind(content)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            r#"
+        UPDATE conversations
+        SET last_message_preview = ?1,
+            last_message_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?2
+      "#,
+        )
+        .bind(preview)
+        .bind(conversation_id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        self.get_message(&message_id).await
+    }
+
+    async fn get_message(&self, id: &str) -> Result<ConversationMessage, ConfigError> {
+        Ok(sqlx::query_as::<_, ConversationMessage>(
+            r#"
+        SELECT id, conversation_id, role, content, created_at
+        FROM messages
+        WHERE id = ?1
+      "#,
+        )
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?)
+    }
+
+    pub async fn get_conversation_messages(
+        &self,
+        conversation_id: &str,
+        limit: Option<i64>,
+    ) -> Result<Vec<ConversationMessage>, ConfigError> {
+        let mut query = String::from(
+            r#"
+        SELECT id, conversation_id, role, content, created_at
+        FROM messages
+        WHERE conversation_id = ?1
+        ORDER BY created_at ASC
+      "#,
+        );
+        if limit.is_some() {
+            query.push_str(" LIMIT ?2");
+        }
+        let mut sql = sqlx::query_as::<_, ConversationMessage>(&query).bind(conversation_id);
+        if let Some(limit) = limit {
+            sql = sql.bind(limit);
+        }
+        let rows = sql.fetch_all(&self.pool).await?;
+        Ok(rows)
+    }
+
     async fn get_provider_by_slug(
         &self,
         provider: &str,
@@ -438,5 +649,48 @@ mod tests {
         assert_eq!(creds.display_name, "OpenAI");
         assert_eq!(creds.default_model.as_deref(), Some("gpt-4o-mini"));
         assert_eq!(creds.api_key, "sk-secret-123");
+    }
+
+    #[tokio::test]
+    async fn conversation_lifecycle_and_messages() {
+        let temp_dir = tempdir().unwrap();
+        let paths = ConfigPaths::from_base_dir(temp_dir.path()).unwrap();
+        let service = ConfigService::with_paths(paths).await.unwrap();
+
+        let convo = service
+            .create_conversation(Some("First chat".into()))
+            .await
+            .unwrap();
+        assert_eq!(convo.title, "First chat");
+
+        let renamed = service
+            .rename_conversation(&convo.id, "Renamed chat")
+            .await
+            .unwrap();
+        assert_eq!(renamed.title, "Renamed chat");
+
+        let pinned = service.set_conversation_pin(&convo.id, true).await.unwrap();
+        assert!(pinned.pinned);
+
+        service
+            .record_message(&convo.id, "user", "Hello there")
+            .await
+            .unwrap();
+        service
+            .record_message(&convo.id, "assistant", "Hi!")
+            .await
+            .unwrap();
+
+        let messages = service
+            .get_conversation_messages(&convo.id, None)
+            .await
+            .unwrap();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].role, "user");
+        assert_eq!(messages[1].role, "assistant");
+
+        service.delete_conversation(&convo.id).await.unwrap();
+        let list = service.list_conversations().await.unwrap();
+        assert!(list.is_empty());
     }
 }

@@ -40,6 +40,8 @@ pub struct ChatStreamChunk {
 pub enum ChatError {
     #[error("{0}")]
     Config(#[from] ConfigError),
+    #[error("conversation id is required")]
+    MissingConversationId,
     #[error("unsupported provider `{0}`")]
     UnsupportedProvider(String),
     #[error("no response received from provider")]
@@ -67,12 +69,21 @@ pub async fn stream_chat(
     request: ChatRequest,
 ) -> Result<(), ChatError> {
     let credential = config.default_provider_credentials().await?;
+    let conversation_id = request
+        .conversation_id
+        .clone()
+        .ok_or(ChatError::MissingConversationId)?;
+    config
+        .record_message(&conversation_id, "user", &request.prompt)
+        .await?;
     info!(
         provider = credential.provider.as_str(),
         "starting streaming chat"
     );
     match credential.provider.as_str() {
-        "openai" | "openrouter" => stream_openai(window, request, credential).await,
+        "openai" | "openrouter" => {
+            stream_openai(window, request, credential, conversation_id, config).await
+        }
         other => Err(ChatError::UnsupportedProvider(other.to_string())),
     }
 }
@@ -138,15 +149,13 @@ async fn stream_openai(
     window: &tauri::Window,
     request: ChatRequest,
     credential: ProviderCredential,
+    conversation_id: String,
+    config: &ConfigService,
 ) -> Result<(), ChatError> {
     let model = request
         .model
         .or(credential.default_model.clone())
         .unwrap_or_else(|| "gpt-4o-mini".to_string());
-
-    let conversation_id = request
-        .conversation_id
-        .unwrap_or_else(|| "default".to_string());
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(60))
@@ -183,6 +192,7 @@ async fn stream_openai(
     }
 
     let mut buffer = String::new();
+    let mut assistant_reply = String::new();
     let mut stream = response.bytes_stream();
 
     while let Some(chunk) = stream.next().await {
@@ -209,6 +219,9 @@ async fn stream_openai(
                         },
                     )
                     .map_err(|err| ChatError::Network(err.to_string()))?;
+                config
+                    .record_message(&conversation_id, "assistant", &assistant_reply)
+                    .await?;
                 return Ok(());
             }
 
@@ -222,6 +235,7 @@ async fn stream_openai(
                 if delta.is_empty() {
                     continue;
                 }
+                assistant_reply.push_str(&delta);
                 debug!(delta = delta.as_str(), "stream delta");
                 window
                     .emit(

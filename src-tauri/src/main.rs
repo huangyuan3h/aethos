@@ -5,7 +5,10 @@ mod config;
 mod services;
 
 use commands::{
-    chat::{invoke_chat, stream_chat},
+    chat::{
+        create_conversation, delete_conversation, get_conversation_messages, invoke_chat,
+        list_conversations, pin_conversation, rename_conversation, stream_chat,
+    },
     preferences::{get_preferences, save_preferences},
     providers::{has_any_provider, list_providers, set_default_provider, upsert_provider},
 };
@@ -22,6 +25,12 @@ fn main() {
             save_preferences,
             invoke_chat,
             stream_chat,
+            create_conversation,
+            list_conversations,
+            rename_conversation,
+            pin_conversation,
+            delete_conversation,
+            get_conversation_messages,
             list_providers,
             upsert_provider,
             set_default_provider,

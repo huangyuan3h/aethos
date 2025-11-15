@@ -4,27 +4,37 @@ import { listen } from '@tauri-apps/api/event'
 import type { UnlistenFn } from '@tauri-apps/api/event'
 
 import { streamChat, type ChatMessage, type ChatStreamChunk } from '../api/chat.client'
+import { getConversationMessages } from '../api/history.client'
+import { useChatHistoryStore } from './history.store'
 
 type MessageStatus = 'pending' | 'sent' | 'error'
 
 interface ChatState {
+  activeConversationId?: string
   messages: Array<ChatMessage & { status: MessageStatus; conversationId?: string }>
   isStreaming: boolean
   error?: string
   sendMessage: (content: string) => Promise<void>
+  loadConversation: (conversationId: string) => Promise<void>
+  prepareConversation: (conversationId: string) => void
   clear: () => void
 }
 
 const isDev = import.meta.env.DEV
 
 export const useChatStore = create<ChatState>((set, get) => ({
+  activeConversationId: undefined,
   messages: [],
   isStreaming: false,
   async sendMessage(content) {
     if (!content.trim() || get().isStreaming) {
       return
     }
-    const conversationId = nanoid()
+    const conversationId = get().activeConversationId
+    if (!conversationId) {
+      set({ error: 'No conversation selected' })
+      return
+    }
     if (isDev) {
       console.debug('[chat] sendMessage', { conversationId, content })
     }
@@ -49,9 +59,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       isStreaming: true,
       error: undefined,
     }))
+    useChatHistoryStore
+      .getState()
+      .updateConversationSnapshot(conversationId, content, new Date().toISOString())
 
     let unlisten: UnlistenFn | undefined
     try {
+      let assistantCompleted = ''
       unlisten = await listen<ChatStreamChunk>('chat:chunk', (event) => {
         const payload = event.payload
         if (isDev) {
@@ -66,6 +80,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
               return msg
             }
             const nextContent = payload.done ? msg.content : `${msg.content}${payload.delta}`
+            if (!payload.done) {
+              assistantCompleted = nextContent
+            }
             return {
               ...msg,
               content: nextContent,
@@ -76,6 +93,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }))
         if (payload.done && unlisten) {
           unlisten()
+          const currentAssistant =
+            get().messages.find((msg) => msg.id === assistantId)?.content ??
+            assistantCompleted
+          useChatHistoryStore
+            .getState()
+            .updateConversationSnapshot(
+              conversationId,
+              currentAssistant,
+              new Date().toISOString(),
+            )
         }
       })
       await streamChat(conversationId, content)
@@ -95,8 +122,40 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }))
     }
   },
+  async loadConversation(conversationId) {
+    set({ isStreaming: false, error: undefined })
+    try {
+      const history = await getConversationMessages(conversationId)
+      const mapped = history.map((message) => {
+        const timestamp = Date.parse(message.createdAt)
+        return {
+          id: message.id,
+          role: message.role,
+          content: message.content,
+          createdAt: Number.isNaN(timestamp) ? Date.now() : timestamp,
+          status: 'sent' as MessageStatus,
+          conversationId: message.conversationId,
+        }
+      })
+      set({
+        activeConversationId: conversationId,
+        messages: mapped,
+      })
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+  prepareConversation(conversationId) {
+    set({
+      activeConversationId: conversationId,
+      messages: [],
+      isStreaming: false,
+      error: undefined,
+    })
+  },
   clear() {
-    set({ messages: [], error: undefined })
+    set({ messages: [], error: undefined, activeConversationId: undefined })
   },
 }))
 
