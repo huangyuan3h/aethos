@@ -40,6 +40,7 @@ export const useChatHistoryStore = create<ChatHistoryState>((set) => ({
     set({ loading: true, error: undefined })
     try {
       const items = await listConversations()
+      console.debug('[history.store] loadConversations', { count: items.length })
       set({ conversations: sortConversations(items), loading: false })
     } catch (error) {
       set({ error: (error as Error).message, loading: false })
@@ -48,6 +49,7 @@ export const useChatHistoryStore = create<ChatHistoryState>((set) => ({
   async createConversation(title) {
     try {
       const conversation = await createConversationApi(title)
+      console.debug('[history.store] createConversation', conversation)
       set((state) => ({
         conversations: sortConversations([conversation, ...state.conversations]),
       }))
@@ -59,7 +61,9 @@ export const useChatHistoryStore = create<ChatHistoryState>((set) => ({
   },
   async renameConversation(id, title) {
     try {
+      console.debug('[history.store] renameConversation -> request', { id, title })
       const updated = await renameConversationApi(id, title)
+      console.debug('[history.store] renameConversation -> response', updated)
       set((state) => ({
         conversations: sortConversations(
           state.conversations.map((c) => (c.id === id ? updated : c)),
@@ -73,7 +77,9 @@ export const useChatHistoryStore = create<ChatHistoryState>((set) => ({
   },
   async togglePin(id, pinned) {
     try {
+      console.debug('[history.store] togglePin -> request', { id, pinned })
       const updated = await pinConversation(id, pinned)
+      console.debug('[history.store] togglePin -> response', updated)
       set((state) => ({
         conversations: sortConversations(
           state.conversations.map((c) => (c.id === id ? updated : c)),
@@ -87,7 +93,9 @@ export const useChatHistoryStore = create<ChatHistoryState>((set) => ({
   },
   async deleteConversation(id) {
     try {
+      console.debug('[history.store] deleteConversation -> request', { id })
       await deleteConversationApi(id)
+      console.debug('[history.store] deleteConversation -> success', { id })
       set((state) => ({
         conversations: state.conversations.filter((conversation) => conversation.id != id),
       }))
@@ -98,6 +106,7 @@ export const useChatHistoryStore = create<ChatHistoryState>((set) => ({
   },
   updateConversationSnapshot(id, preview, timestamp) {
     const iso = timestamp ?? new Date().toISOString()
+    console.debug('[history.store] snapshot', { id, preview, timestamp: iso })
     set((state) => ({
       conversations: sortConversations(
         state.conversations.map((conversation) =>

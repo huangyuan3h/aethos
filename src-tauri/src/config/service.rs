@@ -5,7 +5,7 @@ use std::sync::Arc;
 use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Row};
-use tracing::instrument;
+use tracing::{info, instrument};
 
 use super::{
     crypto::{CryptoService, KeyManager},
@@ -420,6 +420,7 @@ impl ConfigService {
             .bind(id)
             .execute(&self.pool)
             .await?;
+        info!(conversation_id = %id, "conversation deleted");
         Ok(())
     }
 
