@@ -72,6 +72,7 @@ impl From<ProviderRow> for ProviderSummary {
 pub struct UserPreferences {
     pub language: Option<String>,
     pub theme: Option<String>,
+    pub system_prompt: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -187,6 +188,8 @@ pub struct McpServerUpsert {
 pub struct PreferencesUpdate {
     pub language: Option<String>,
     pub theme: Option<String>,
+    #[serde(default)]
+    pub system_prompt: Option<String>,
 }
 
 pub struct ConfigService {
@@ -205,6 +208,7 @@ impl ConfigService {
         Ok(UserPreferences {
             language: self.get_setting("ui.language").await?,
             theme: self.get_setting("ui.theme").await?,
+            system_prompt: self.get_setting("chat.systemPrompt").await?,
         })
     }
 
@@ -214,6 +218,10 @@ impl ConfigService {
         }
         if let Some(theme) = prefs.theme {
             self.set_setting("ui.theme", &theme, false).await?;
+        }
+        if let Some(prompt) = prefs.system_prompt {
+            self.set_setting("chat.systemPrompt", &prompt, false)
+                .await?;
         }
         Ok(())
     }
@@ -938,12 +946,14 @@ mod tests {
             .save_preferences(PreferencesUpdate {
                 language: Some("zh-CN".into()),
                 theme: Some("dark".into()),
+                system_prompt: Some("You are Aethos".into()),
             })
             .await
             .unwrap();
         let prefs = service.get_preferences().await.unwrap();
         assert_eq!(prefs.language.as_deref(), Some("zh-CN"));
         assert_eq!(prefs.theme.as_deref(), Some("dark"));
+        assert_eq!(prefs.system_prompt.as_deref(), Some("You are Aethos"));
     }
 
     #[tokio::test]

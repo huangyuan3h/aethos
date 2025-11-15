@@ -28,10 +28,11 @@ export async function sendChat(prompt: string, model?: string): Promise<InvokeCh
 export async function streamChat(
   conversationId: string,
   prompt: string,
+  systemPrompt?: string,
   model?: string,
 ): Promise<void> {
   await invoke('stream_chat', {
-    request: { prompt, model, conversationId },
+    request: { prompt, model, conversationId, systemPrompt },
   })
 }
 

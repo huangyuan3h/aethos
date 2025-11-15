@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
@@ -70,33 +71,35 @@ export function McpSettings() {
   }
 
   return (
-    <div className="space-y-10">
-      <header className="flex items-center justify-between">
+    <div className="space-y-6">
+      <header className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/40 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold">MCP marketplace</h2>
           <p className="text-sm text-muted-foreground">
-            Manage Model Context Protocol servers, sources, and installations.
+            Manage Model Context Protocol sources, registry entries, and installed servers.
           </p>
         </div>
         <Button
-          variant="ghost"
+          variant="outline"
           onClick={() => loadAll().catch(console.error)}
           disabled={loading}
         >
           <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />
-          Refresh
+          Refresh data
         </Button>
       </header>
 
-      <section className="grid gap-8 md:grid-cols-2">
-        <div className="rounded-2xl border border-border/80 p-4">
-          <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            Sources
-          </h3>
-          <form
-            className="mt-4 space-y-3"
-            onSubmit={handleSourceSubmit}
-          >
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Sources</CardTitle>
+            <CardDescription>Add or remove marketplace endpoints.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <form
+              className="space-y-3"
+              onSubmit={handleSourceSubmit}
+            >
             <div>
               <Label htmlFor="mcp-source-slug">Slug</Label>
               <Input
@@ -130,8 +133,8 @@ export function McpSettings() {
             </div>
             <Button
               type="submit"
-              disabled={isSubmitting === 'source'}
               className="w-full"
+              disabled={isSubmitting === 'source'}
             >
               {isSubmitting === 'source' ? (
                 <>
@@ -143,39 +146,42 @@ export function McpSettings() {
               )}
             </Button>
           </form>
-          <div className="mt-6 space-y-3">
-            {sources.map((source) => (
-              <div
-                key={source.slug}
-                className="rounded-xl border border-border/60 px-3 py-2"
-              >
-                <div className="flex items-center justify-between text-sm font-medium">
-                  <span>{source.name}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeSource(source.slug).catch(console.error)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+            <div className="space-y-3">
+              {sources.map((source) => (
+                <div
+                  key={source.slug}
+                  className="rounded-xl border border-border/60 px-3 py-2"
+                >
+                  <div className="flex items-center justify-between text-sm font-medium">
+                    <span>{source.name}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeSource(source.slug).catch(console.error)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{source.endpoint ?? '—'}</p>
                 </div>
-                <p className="text-xs text-muted-foreground">{source.endpoint ?? '—'}</p>
-              </div>
-            ))}
-            {sources.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No sources configured yet.</p>
-            ) : null}
-          </div>
-        </div>
+              ))}
+              {sources.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No sources configured yet.</p>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
 
-        <div className="rounded-2xl border border-border/80 p-4">
-          <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            Installed servers
-          </h3>
-          <form
-            className="mt-4 space-y-3"
-            onSubmit={handleServerSubmit}
-          >
+        <Card>
+          <CardHeader>
+            <CardTitle>Installed servers</CardTitle>
+            <CardDescription>Register downloaded MCP servers and manage runtime state.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <form
+              className="space-y-3"
+              onSubmit={handleServerSubmit}
+            >
             <div>
               <Label htmlFor="mcp-server-slug">Slug</Label>
               <Input
@@ -208,8 +214,8 @@ export function McpSettings() {
             </div>
             <Button
               type="submit"
-              disabled={isSubmitting === 'server'}
               className="w-full"
+              disabled={isSubmitting === 'server'}
             >
               {isSubmitting === 'server' ? (
                 <>
@@ -222,73 +228,79 @@ export function McpSettings() {
             </Button>
           </form>
 
-          <div className="mt-6 space-y-3">
-            {servers.map((server) => (
-              <div
-                key={server.slug}
-                className="rounded-xl border border-border/60 p-3"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">{server.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {server.installedVersion ?? 'unknown'} · {server.status}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() =>
-                        setServerStatus(server.slug, server.status === 'running' ? 'stopped' : 'running')
-                      }
-                    >
-                      {server.status === 'running' ? 'Stop' : 'Start'}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeServer(server.slug).catch(console.error)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+            <div className="space-y-3">
+              {servers.map((server) => (
+                <div
+                  key={server.slug}
+                  className="rounded-xl border border-border/60 p-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{server.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {server.installedVersion ?? 'unknown'} · {server.status}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          setServerStatus(server.slug, server.status === 'running' ? 'stopped' : 'running')
+                        }
+                      >
+                        {server.status === 'running' ? 'Stop' : 'Start'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeServer(server.slug).catch(console.error)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-            {servers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No servers installed yet.</p>
-            ) : null}
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-border/80 p-4">
-        <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-          Registry
-        </h3>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {registry.map((entry) => (
-            <div
-              key={`${entry.slug}@${entry.version}`}
-              className="rounded-xl border border-border/60 p-3"
-            >
-              <p className="font-semibold">
-                {entry.name} <span className="text-xs text-muted-foreground">v{entry.version}</span>
-              </p>
-              <p className="text-sm text-muted-foreground">{entry.summary ?? 'No summary provided.'}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Source: {entry.sourceSlug ?? 'manual'}
-              </p>
+              ))}
+              {servers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No servers installed yet.</p>
+              ) : null}
             </div>
-          ))}
-        </div>
-        {registry.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Registry is empty. Add a source and refresh to populate entries.
-          </p>
-        ) : null}
-      </section>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Registry</CardTitle>
+          <CardDescription>Entries synced from configured sources.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {registry.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Registry is empty. Add a source and refresh to populate entries.
+            </p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {registry.map((entry) => (
+                <div
+                  key={`${entry.slug}@${entry.version}`}
+                  className="rounded-xl border border-border/60 p-3"
+                >
+                  <p className="font-semibold">
+                    {entry.name}{' '}
+                    <span className="text-xs text-muted-foreground">v{entry.version}</span>
+                  </p>
+                  <p className="text-sm text-muted-foreground">{entry.summary ?? 'No summary provided.'}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Source: {entry.sourceSlug ?? 'manual'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

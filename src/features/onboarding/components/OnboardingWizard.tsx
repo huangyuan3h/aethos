@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 const LANGUAGES = [
   { code: 'en', label: 'English' },
   { code: 'zh-CN', label: '简体中文' },
+  { code: 'fr-FR', label: 'Français' },
 ] as const
 
 const THEMES = [
@@ -26,7 +27,7 @@ export function OnboardingWizard() {
   const needsPreferences = usePreferencesStore((state) => state.needsSetup)
 
   const [step, setStep] = useState(0)
-  const [language, setLanguage] = useState<'en' | 'zh-CN'>('en')
+  const [language, setLanguage] = useState<'en' | 'zh-CN' | 'fr-FR'>('en')
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const applyLanguage = usePreferencesStore((state) => state.applyLanguage)
   const applyTheme = usePreferencesStore((state) => state.applyTheme)
@@ -36,7 +37,7 @@ export function OnboardingWizard() {
   }
 
   const handlePreferencesComplete = async () => {
-    await savePreferences({ language, theme })
+    await savePreferences({ language, theme, systemPrompt: undefined })
   }
 
   const handleFinish = async () => {

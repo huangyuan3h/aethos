@@ -6,6 +6,7 @@ import type { UnlistenFn } from '@tauri-apps/api/event'
 import { streamChat, type ChatMessage, type ChatStreamChunk } from '../api/chat.client'
 import { getConversationMessages } from '../api/history.client'
 import { useChatHistoryStore } from './history.store'
+import { usePreferencesStore } from '@/features/preferences/state/preferences.store'
 
 type MessageStatus = 'pending' | 'sent' | 'error'
 
@@ -35,6 +36,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ error: 'No conversation selected' })
       return
     }
+    const systemPrompt = usePreferencesStore.getState().systemPrompt
     if (isDev) {
       console.debug('[chat] sendMessage', { conversationId, content })
     }
@@ -105,7 +107,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             )
         }
       })
-      await streamChat(conversationId, content)
+      await streamChat(conversationId, content, systemPrompt)
     } catch (error) {
       if (isDev) {
         console.debug('[chat] stream error', error)

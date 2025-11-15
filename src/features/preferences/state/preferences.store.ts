@@ -4,16 +4,21 @@ import { invoke } from '@tauri-apps/api/core'
 import { applyThemeClass } from '../utils/theme'
 
 type ThemeOption = 'light' | 'dark'
-type LanguageOption = 'en' | 'zh-CN'
+type LanguageOption = 'en' | 'zh-CN' | 'fr-FR'
 
 interface PreferencesState {
   language?: LanguageOption
   theme?: ThemeOption
+  systemPrompt?: string
   isLoaded: boolean
   needsSetup: boolean
   error?: string
   fetchPreferences: () => Promise<void>
-  savePreferences: (input: { language: LanguageOption; theme: ThemeOption }) => Promise<void>
+  savePreferences: (input: {
+    language: LanguageOption
+    theme: ThemeOption
+    systemPrompt?: string
+  }) => Promise<void>
   applyLanguage: (language: LanguageOption) => void
   applyTheme: (theme: ThemeOption) => void
   markSetupComplete: () => void
@@ -22,18 +27,21 @@ interface PreferencesState {
 export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   language: undefined,
   theme: undefined,
+  systemPrompt: undefined,
   isLoaded: false,
   needsSetup: true,
   async fetchPreferences() {
     try {
-      const response = await invoke<{ preferences: { language?: string; theme?: string } }>(
-        'get_preferences',
-      )
+      const response = await invoke<{
+        preferences: { language?: string; theme?: string; systemPrompt?: string }
+      }>('get_preferences')
       const language = (response.preferences.language as LanguageOption | undefined) ?? undefined
       const theme = (response.preferences.theme as ThemeOption | undefined) ?? undefined
+      const systemPrompt = response.preferences.systemPrompt ?? undefined
       set({
         language,
         theme,
+        systemPrompt,
         isLoaded: true,
         needsSetup: !language || !theme,
       })
@@ -47,11 +55,11 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       set({ error: (error as Error).message, isLoaded: true, needsSetup: true })
     }
   },
-  async savePreferences({ language, theme }) {
+  async savePreferences({ language, theme, systemPrompt }) {
     await invoke('save_preferences', {
-      update: { language, theme },
+      update: { language, theme, systemPrompt },
     })
-    set({ language, theme, needsSetup: false })
+    set({ language, theme, systemPrompt, needsSetup: false })
     get().applyLanguage(language)
     get().applyTheme(theme)
   },

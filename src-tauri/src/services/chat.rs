@@ -18,6 +18,7 @@ pub struct ChatRequest {
     pub prompt: String,
     pub model: Option<String>,
     pub conversation_id: Option<String>,
+    pub system_prompt: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -104,6 +105,20 @@ async fn send_openai(
         .or(credential.default_model.clone())
         .unwrap_or_else(|| "gpt-4o-mini".to_string());
 
+    let mut messages = Vec::new();
+    if let Some(system_prompt) = &request.system_prompt {
+        if !system_prompt.trim().is_empty() {
+            messages.push(OpenAiMessage {
+                role: "system".into(),
+                content: system_prompt.clone(),
+            });
+        }
+    }
+    messages.push(OpenAiMessage {
+        role: "user".into(),
+        content: request.prompt.clone(),
+    });
+
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
@@ -111,10 +126,7 @@ async fn send_openai(
 
     let body = OpenAiRequest {
         model: model.clone(),
-        messages: vec![OpenAiMessage {
-            role: "user".into(),
-            content: request.prompt,
-        }],
+        messages,
         stream: None,
     };
 
@@ -164,6 +176,20 @@ async fn stream_openai(
         .or(credential.default_model.clone())
         .unwrap_or_else(|| "gpt-4o-mini".to_string());
 
+    let mut messages = Vec::new();
+    if let Some(system_prompt) = &request.system_prompt {
+        if !system_prompt.trim().is_empty() {
+            messages.push(OpenAiMessage {
+                role: "system".into(),
+                content: system_prompt.clone(),
+            });
+        }
+    }
+    messages.push(OpenAiMessage {
+        role: "user".into(),
+        content: request.prompt.clone(),
+    });
+
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(60))
         .build()
@@ -173,10 +199,7 @@ async fn stream_openai(
 
     let body = OpenAiRequest {
         model: model.clone(),
-        messages: vec![OpenAiMessage {
-            role: "user".into(),
-            content: request.prompt,
-        }],
+        messages,
         stream: Some(true),
     };
 
