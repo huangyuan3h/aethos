@@ -3,8 +3,9 @@
 mod commands;
 mod config;
 
-use commands::providers::{
-    has_any_provider, list_providers, set_default_provider, upsert_provider,
+use commands::{
+    preferences::{get_preferences, save_preferences},
+    providers::{has_any_provider, list_providers, set_default_provider, upsert_provider},
 };
 
 fn main() {
@@ -15,6 +16,8 @@ fn main() {
     tauri::Builder::default()
         .manage(config_service)
         .invoke_handler(tauri::generate_handler![
+            get_preferences,
+            save_preferences,
             list_providers,
             upsert_provider,
             set_default_provider,

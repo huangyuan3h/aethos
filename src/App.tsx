@@ -1,3 +1,4 @@
+import { OnboardingWizard } from '@/features/onboarding/components/OnboardingWizard'
 import { SettingsPanel } from '@/features/settings/components/SettingsPanel'
 import { useSettingsStore } from '@/features/settings/state/settings.store'
 import { Button } from '@/components/ui/button'
@@ -65,6 +66,7 @@ export default function App() {
       </main>
 
       <SettingsPanel />
+      <OnboardingWizard />
     </div>
   )
 }

@@ -9,6 +9,13 @@ import { useSettingsStore } from '../state/settings.store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 const schema = z.object({
   provider: z.enum(['openai', 'openrouter', 'anthropic', 'google']),
@@ -20,7 +27,12 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-export function ProviderForm() {
+interface ProviderFormProps {
+  onSuccess?: () => void
+  variant?: 'default' | 'compact'
+}
+
+export function ProviderForm({ onSuccess, variant = 'default' }: ProviderFormProps = {}) {
   const saveProvider = useSettingsStore((state) => state.saveProvider)
   const isLoading = useSettingsStore((state) => state.isLoading)
   const providers = useSettingsStore((state) => state.providers)
@@ -40,10 +52,6 @@ export function ProviderForm() {
     useState<FormValues['provider']>(form.getValues('provider'))
 
   useEffect(() => {
-    form.register('provider')
-  }, [form])
-
-  useEffect(() => {
     const meta = PROVIDER_OPTIONS.find((option) => option.id === selectedProvider)
     if (meta) {
       form.setValue('displayName', meta.label, { shouldValidate: true })
@@ -52,11 +60,12 @@ export function ProviderForm() {
   }, [selectedProvider, form])
 
   const onSubmit = async (values: FormValues) => {
+    const providerMeta = PROVIDER_OPTIONS.find((option) => option.id === values.provider)
     const payload: ProviderUpsertPayload = {
       provider: values.provider,
-      displayName: values.displayName,
+      displayName: variant === 'compact' ? providerMeta?.label ?? values.displayName : values.displayName,
       apiKey: values.apiKey,
-      defaultModel: values.defaultModel,
+      defaultModel: variant === 'compact' ? undefined : values.defaultModel,
       makeDefault: Boolean(values.makeDefault),
     }
     await saveProvider(payload)
@@ -66,6 +75,7 @@ export function ProviderForm() {
       makeDefault: false,
     })
     setSelectedProvider(values.provider)
+    onSuccess?.()
   }
 
   return (
@@ -75,36 +85,41 @@ export function ProviderForm() {
     >
       <div className="space-y-1">
         <label className="text-sm font-medium text-foreground">Provider</label>
-        <select
-          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        <Select
           value={selectedProvider}
-          onChange={(event) => {
-            const next = event.target.value as FormValues['provider']
-            setSelectedProvider(next)
-            form.setValue('provider', next, { shouldValidate: true })
+          onValueChange={(next) => {
+            const typed = next as FormValues['provider']
+            setSelectedProvider(typed)
+            form.setValue('provider', typed, { shouldValidate: true, shouldDirty: true })
           }}
         >
-          {PROVIDER_OPTIONS.map((option) => (
-            <option
-              key={option.id}
-              value={option.id}
-            >
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <p className="text-xs text-muted-foreground">
-          {PROVIDER_OPTIONS.find((p) => p.id === selectedProvider)?.hint}
-        </p>
+          <SelectTrigger>
+            <SelectValue placeholder="Choose a provider" />
+          </SelectTrigger>
+          <SelectContent>
+            {PROVIDER_OPTIONS.map((option) => (
+              <SelectItem
+                key={option.id}
+                value={option.id}
+                className="flex-col items-start gap-0"
+              >
+                <span className="font-medium">{option.label}</span>
+                <span className="text-xs text-muted-foreground">{option.hint}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      <div className="space-y-1">
-        <label className="text-sm font-medium text-foreground">Display name</label>
-        <Input
-          placeholder="OpenAI"
-          {...form.register('displayName')}
-        />
-      </div>
+      {variant === 'default' ? (
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-foreground">Display name</label>
+          <Input
+            placeholder="OpenAI"
+            {...form.register('displayName')}
+          />
+        </div>
+      ) : null}
 
       <div className="space-y-1">
         <label className="text-sm font-medium text-foreground">API Key</label>
@@ -117,13 +132,15 @@ export function ProviderForm() {
         )}
       </div>
 
-      <div className="space-y-1">
-        <label className="text-sm font-medium text-foreground">Preferred model</label>
-        <Input
-          placeholder="gpt-4o-mini"
-          {...form.register('defaultModel')}
-        />
-      </div>
+      {variant === 'default' ? (
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-foreground">Preferred model</label>
+          <Input
+            placeholder="gpt-4o-mini"
+            {...form.register('defaultModel')}
+          />
+        </div>
+      ) : null}
 
       <label className="flex items-center gap-2 text-sm text-foreground">
         <input

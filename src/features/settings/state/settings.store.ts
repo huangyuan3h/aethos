@@ -8,6 +8,7 @@ interface SettingsState {
   isSettingsOpen: boolean
   isLoading: boolean
   onboardingNeeded: boolean
+  isLoaded: boolean
   error?: string
   fetchProviders: () => Promise<void>
   saveProvider: (payload: ProviderUpsertPayload) => Promise<void>
@@ -21,6 +22,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   isSettingsOpen: false,
   isLoading: false,
   onboardingNeeded: false,
+  isLoaded: false,
   async fetchProviders() {
     set({ isLoading: true, error: undefined })
     try {
@@ -32,9 +34,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         isLoading: false,
         onboardingNeeded,
         isSettingsOpen: onboardingNeeded || get().isSettingsOpen,
+        isLoaded: true,
       })
     } catch (error) {
-      set({ error: (error as Error).message, isLoading: false })
+      set({ error: (error as Error).message, isLoading: false, isLoaded: true })
     }
   },
   async saveProvider(payload) {

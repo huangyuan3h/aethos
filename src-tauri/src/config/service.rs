@@ -57,6 +57,18 @@ impl From<ProviderRow> for ProviderSummary {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct UserPreferences {
+    pub language: Option<String>,
+    pub theme: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PreferencesUpdate {
+    pub language: Option<String>,
+    pub theme: Option<String>,
+}
+
 pub struct ConfigService {
     pool: sqlx::SqlitePool,
     crypto: CryptoService,
@@ -67,6 +79,23 @@ impl ConfigService {
     pub async fn initialize() -> Result<SharedConfigService, ConfigError> {
         let paths = ConfigPaths::default()?;
         Self::with_paths(paths).await
+    }
+
+    pub async fn get_preferences(&self) -> Result<UserPreferences, ConfigError> {
+        Ok(UserPreferences {
+            language: self.get_setting("ui.language").await?,
+            theme: self.get_setting("ui.theme").await?,
+        })
+    }
+
+    pub async fn save_preferences(&self, prefs: PreferencesUpdate) -> Result<(), ConfigError> {
+        if let Some(language) = prefs.language {
+            self.set_setting("ui.language", &language, false).await?;
+        }
+        if let Some(theme) = prefs.theme {
+            self.set_setting("ui.theme", &theme, false).await?;
+        }
+        Ok(())
     }
 
     pub async fn with_paths(paths: ConfigPaths) -> Result<SharedConfigService, ConfigError> {
@@ -318,5 +347,23 @@ mod tests {
             .unwrap();
         assert!(!openai.is_default);
         assert!(anthropic.is_default);
+    }
+
+    #[tokio::test]
+    async fn preferences_roundtrip() {
+        let temp_dir = tempdir().unwrap();
+        let paths = ConfigPaths::from_base_dir(temp_dir.path()).unwrap();
+        let service = ConfigService::with_paths(paths).await.unwrap();
+
+        service
+            .save_preferences(PreferencesUpdate {
+                language: Some("zh-CN".into()),
+                theme: Some("dark".into()),
+            })
+            .await
+            .unwrap();
+        let prefs = service.get_preferences().await.unwrap();
+        assert_eq!(prefs.language.as_deref(), Some("zh-CN"));
+        assert_eq!(prefs.theme.as_deref(), Some("dark"));
     }
 }
