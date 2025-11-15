@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { usePreferencesStore } from '@/features/preferences/state/preferences.store'
+import { useI18n } from '@/i18n/I18nProvider'
 
 const LANGUAGE_OPTIONS = [
   { value: 'en', label: 'English' },
@@ -28,6 +29,7 @@ export function GeneralSettings() {
   const [promptInput, setPromptInput] = useState(systemPrompt)
   const [isSaving, setIsSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
+  const { t } = useI18n()
 
   useEffect(() => {
     setSelectedLanguage(language)
@@ -59,8 +61,8 @@ export function GeneralSettings() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Language</CardTitle>
-          <CardDescription>Select the interface language for Aethos.</CardDescription>
+          <CardTitle>{t('settings.general.language.title')}</CardTitle>
+          <CardDescription>{t('settings.general.language.description')}</CardDescription>
         </CardHeader>
         <CardContent>
           <Select
@@ -68,7 +70,7 @@ export function GeneralSettings() {
             onValueChange={(value: 'en' | 'zh-CN' | 'fr-FR') => setSelectedLanguage(value)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select language" />
+              <SelectValue placeholder={t('settings.general.language.placeholder')} />
             </SelectTrigger>
             <SelectContent>
               {LANGUAGE_OPTIONS.map((option) => (
@@ -86,17 +88,14 @@ export function GeneralSettings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>System prompt</CardTitle>
-          <CardDescription>
-            Customize how Aethos introduces itself in every conversation. Leave empty for default
-            behavior.
-          </CardDescription>
+          <CardTitle>{t('settings.general.systemPrompt.title')}</CardTitle>
+          <CardDescription>{t('settings.general.systemPrompt.description')}</CardDescription>
         </CardHeader>
         <CardContent>
           <Textarea
             value={promptInput}
             onChange={(event) => setPromptInput(event.target.value)}
-            placeholder="e.g. You are Aethos, a bilingual AI workspace assistant..."
+            placeholder={t('settings.general.systemPrompt.placeholder')}
             rows={7}
           />
         </CardContent>
@@ -107,7 +106,7 @@ export function GeneralSettings() {
           onClick={handleSave}
           disabled={isSaving || !hasChanges}
         >
-          {isSaving ? 'Saving...' : 'Save changes'}
+          {isSaving ? t('common.actions.saving') : t('settings.general.saveButton')}
         </Button>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { useSettingsStore } from '../state/settings.store'
 import { ProviderForm } from './ProviderForm'
@@ -8,17 +8,38 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { McpSettings } from '@/features/mcp/components/McpSettings'
 import { cn } from '@/lib/utils'
 import { GeneralSettings } from './GeneralSettings'
+import { useI18n } from '@/i18n/I18nProvider'
 
 export function SettingsPanel() {
   const isOpen = useSettingsStore((state) => state.isSettingsOpen)
   const close = useSettingsStore((state) => state.closeSettings)
   const onboardingNeeded = useSettingsStore((state) => state.onboardingNeeded)
-  const sections: Array<{ id: SettingsSection; label: string; description: string }> = [
-    { id: 'general', label: 'General', description: 'App-wide defaults & behavior' },
-    { id: 'theme', label: 'Theme', description: 'Appearance & typography' },
-    { id: 'providers', label: 'Providers', description: 'AI provider credentials' },
-    { id: 'mcp', label: 'MCP', description: 'Model Context Protocol servers' },
-  ]
+  const { t } = useI18n()
+  const sections = useMemo(
+    () => [
+      {
+        id: 'general' as SettingsSection,
+        label: t('settings.nav.general.label'),
+        description: t('settings.nav.general.description'),
+      },
+      {
+        id: 'theme' as SettingsSection,
+        label: t('settings.nav.theme.label'),
+        description: t('settings.nav.theme.description'),
+      },
+      {
+        id: 'providers' as SettingsSection,
+        label: t('settings.nav.providers.label'),
+        description: t('settings.nav.providers.description'),
+      },
+      {
+        id: 'mcp' as SettingsSection,
+        label: t('settings.nav.mcp.label'),
+        description: t('settings.nav.mcp.description'),
+      },
+    ],
+    [t],
+  )
   const [view, setView] = useState<SettingsSection>('providers')
 
   if (!isOpen) {
@@ -32,9 +53,14 @@ export function SettingsPanel() {
           <div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                Settings
+                {t('settings.header.kicker')}
               </p>
-              <h2 className="mt-1 text-2xl font-semibold">Workspace</h2>
+              <h2 className="mt-1 text-2xl font-semibold">
+                {t(`settings.header.sectionTitle.${view}` as const)}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {t(`settings.header.sectionDescription.${view}` as const)}
+              </p>
             </div>
             <nav className="mt-6 space-y-1">
               {sections.map((section) => (
@@ -60,7 +86,7 @@ export function SettingsPanel() {
               variant="ghost"
               onClick={close}
             >
-              Close
+              {t('common.actions.close', { defaultValue: 'Close' })}
             </Button>
           ) : null}
         </aside>
@@ -71,23 +97,19 @@ export function SettingsPanel() {
           ) : view === 'theme' ? (
             <Card>
               <CardHeader>
-                <CardTitle>Theme</CardTitle>
-                <CardDescription>Control color scheme and typography.</CardDescription>
+                <CardTitle>{t('settings.nav.theme.label')}</CardTitle>
+                <CardDescription>{t('settings.theme.description')}</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Theme customization will be available in a future update.
-                </p>
+                <p className="text-sm text-muted-foreground">{t('settings.theme.description')}</p>
               </CardContent>
             </Card>
           ) : view === 'providers' ? (
             <div className="grid gap-6 lg:grid-cols-[360px,1fr]">
               <Card className="h-fit">
                 <CardHeader>
-                  <CardTitle>Add provider</CardTitle>
-                  <CardDescription>
-                    Save OpenAI, OpenRouter, Anthropic or other compatible keys with encryption.
-                  </CardDescription>
+                  <CardTitle>{t('settings.providers.addTitle')}</CardTitle>
+                  <CardDescription>{t('settings.providers.addDescription')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ProviderForm />
@@ -95,10 +117,8 @@ export function SettingsPanel() {
               </Card>
               <Card className="h-full">
                 <CardHeader>
-                  <CardTitle>Connected providers</CardTitle>
-                  <CardDescription>
-                    Choose a default model or remove providers you no longer need.
-                  </CardDescription>
+                  <CardTitle>{t('settings.providers.listTitle')}</CardTitle>
+                  <CardDescription>{t('settings.providers.listDescription')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ProviderList />

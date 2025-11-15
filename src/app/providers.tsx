@@ -4,6 +4,7 @@ import type { PropsWithChildren } from 'react'
 import { useOnboardingStore } from '@/features/onboarding/state/onboarding.store'
 import { usePreferencesStore } from '@/features/preferences/state/preferences.store'
 import { useSettingsStore } from '@/features/settings/state/settings.store'
+import { I18nProvider } from '@/i18n/I18nProvider'
 
 export function AppProviders({ children }: PropsWithChildren) {
   const fetchProviders = useSettingsStore((state) => state.fetchProviders)
@@ -37,5 +38,5 @@ export function AppProviders({ children }: PropsWithChildren) {
     closeOnboarding,
   ])
 
-  return children
+  return <I18nProvider>{children}</I18nProvider>
 }
