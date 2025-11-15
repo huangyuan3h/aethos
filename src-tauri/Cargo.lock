@@ -16,6 +16,7 @@ dependencies = [
  "base64 0.22.1",
  "directories",
  "dotenvy",
+ "futures-util",
  "once_cell",
  "rand 0.8.5",
  "reqwest",

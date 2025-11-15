@@ -1,3 +1,6 @@
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+
 import { useChatStore } from '../state/chat.store'
 import { ChatInput } from './ChatInput'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -5,7 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 export function ChatScreen() {
   const messages = useChatStore((state) => state.messages)
   const sendMessage = useChatStore((state) => state.sendMessage)
-  const isSending = useChatStore((state) => state.isSending)
+  const isStreaming = useChatStore((state) => state.isStreaming)
   const error = useChatStore((state) => state.error)
 
   return (
@@ -24,7 +27,16 @@ export function ChatScreen() {
                     : 'border-border bg-card text-card-foreground'
                 } ${message.status === 'error' ? 'border-destructive text-destructive' : ''}`}
               >
-                {message.content}
+                {message.role === 'assistant' ? (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    className="prose prose-invert max-w-none text-sm"
+                  >
+                    {message.content || '...'}
+                  </ReactMarkdown>
+                ) : (
+                  message.content
+                )}
               </div>
             </div>
           ))}
@@ -32,7 +44,7 @@ export function ChatScreen() {
       </ScrollArea>
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
       <ChatInput
-        disabled={isSending}
+        disabled={isStreaming}
         onSend={sendMessage}
       />
     </div>

@@ -1,13 +1,15 @@
 import { create } from 'zustand'
 import { nanoid } from 'nanoid'
+import { listen } from '@tauri-apps/api/event'
+import type { UnlistenFn } from '@tauri-apps/api/event'
 
-import { sendChat, type ChatMessage } from '../api/chat.client'
+import { streamChat, type ChatMessage, type ChatStreamChunk } from '../api/chat.client'
 
 type MessageStatus = 'pending' | 'sent' | 'error'
 
 interface ChatState {
-  messages: Array<ChatMessage & { status: MessageStatus }>
-  isSending: boolean
+  messages: Array<ChatMessage & { status: MessageStatus; conversationId?: string }>
+  isStreaming: boolean
   error?: string
   sendMessage: (content: string) => Promise<void>
   clear: () => void
@@ -15,11 +17,12 @@ interface ChatState {
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
-  isSending: false,
+  isStreaming: false,
   async sendMessage(content) {
-    if (!content.trim() || get().isSending) {
+    if (!content.trim() || get().isStreaming) {
       return
     }
+    const conversationId = nanoid()
     const userMessage: ChatMessage & { status: MessageStatus } = {
       id: nanoid(),
       role: 'user',
@@ -27,30 +30,56 @@ export const useChatStore = create<ChatState>((set, get) => ({
       createdAt: Date.now(),
       status: 'sent',
     }
+    const assistantId = nanoid()
+    const assistantMessage: ChatMessage & { status: MessageStatus; conversationId: string } = {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      createdAt: Date.now() + 1,
+      status: 'pending',
+      conversationId,
+    }
     set((state) => ({
-      messages: [...state.messages, userMessage],
-      isSending: true,
+      messages: [...state.messages, userMessage, assistantMessage],
+      isStreaming: true,
       error: undefined,
     }))
+
+    let unlisten: UnlistenFn | undefined
     try {
-      const response = await sendChat(content)
-      const assistantMessage: ChatMessage & { status: MessageStatus } = {
-        id: nanoid(),
-        role: 'assistant',
-        content: response.reply,
-        createdAt: Date.now(),
-        status: 'sent',
+      unlisten = await listen<ChatStreamChunk>('chat:chunk', (event) => {
+        const payload = event.payload
+        if (payload.conversationId !== conversationId) {
+          return
+        }
+        set((state) => ({
+          messages: state.messages.map((msg) => {
+            if (msg.id !== assistantId) {
+              return msg
+            }
+            const nextContent = payload.done ? msg.content : `${msg.content}${payload.delta}`
+            return {
+              ...msg,
+              content: nextContent,
+              status: payload.done ? 'sent' : 'pending',
+            }
+          }),
+          isStreaming: payload.done ? false : state.isStreaming,
+        }))
+        if (payload.done && unlisten) {
+          unlisten()
+        }
+      })
+      await streamChat(conversationId, content)
+    } catch (error) {
+      if (unlisten) {
+        unlisten()
       }
       set((state) => ({
-        messages: [...state.messages, assistantMessage],
-        isSending: false,
-      }))
-    } catch (error) {
-      set((state) => ({
         messages: state.messages.map((msg) =>
-          msg.id === userMessage.id ? { ...msg, status: 'error' } : msg,
+          msg.id === assistantId ? { ...msg, status: 'error' } : msg,
         ),
-        isSending: false,
+        isStreaming: false,
         error: (error as Error).message,
       }))
     }

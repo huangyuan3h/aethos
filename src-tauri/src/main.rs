@@ -5,7 +5,7 @@ mod config;
 mod services;
 
 use commands::{
-    chat::invoke_chat,
+    chat::{invoke_chat, stream_chat},
     preferences::{get_preferences, save_preferences},
     providers::{has_any_provider, list_providers, set_default_provider, upsert_provider},
 };
@@ -21,6 +21,7 @@ fn main() {
             get_preferences,
             save_preferences,
             invoke_chat,
+            stream_chat,
             list_providers,
             upsert_provider,
             set_default_provider,
