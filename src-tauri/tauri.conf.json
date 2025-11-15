@@ -20,7 +20,10 @@
         "decorations": true
       }
     ],
-    "withGlobalTauri": false
+    "withGlobalTauri": false,
+    "security": {
+      "capabilities": ["default"]
+    }
   },
   "bundle": {
     "active": true,
@@ -28,4 +31,3 @@
     "icon": []
   }
 }
-

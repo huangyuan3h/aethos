@@ -5,6 +5,7 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tauri::Emitter;
 use thiserror::Error;
+use tracing::{debug, info, warn};
 
 use crate::config::service::{ConfigService, ProviderCredential};
 use crate::config::ConfigError;
@@ -66,6 +67,10 @@ pub async fn stream_chat(
     request: ChatRequest,
 ) -> Result<(), ChatError> {
     let credential = config.default_provider_credentials().await?;
+    info!(
+        provider = credential.provider.as_str(),
+        "starting streaming chat"
+    );
     match credential.provider.as_str() {
         "openai" | "openrouter" => stream_openai(window, request, credential).await,
         other => Err(ChatError::UnsupportedProvider(other.to_string())),
@@ -192,6 +197,7 @@ async fn stream_openai(
             }
             event = event.replace("data:", "").trim().to_string();
             if event == "[DONE]" {
+                debug!("stream finished");
                 window
                     .emit(
                         "chat:chunk",
@@ -216,6 +222,7 @@ async fn stream_openai(
                 if delta.is_empty() {
                     continue;
                 }
+                debug!(delta = delta.as_str(), "stream delta");
                 window
                     .emit(
                         "chat:chunk",
@@ -231,6 +238,7 @@ async fn stream_openai(
         }
     }
 
+    warn!("stream ended without completion");
     Err(ChatError::EmptyResponse)
 }
 

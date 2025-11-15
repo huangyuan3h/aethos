@@ -15,6 +15,8 @@ interface ChatState {
   clear: () => void
 }
 
+const isDev = import.meta.env.DEV
+
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   isStreaming: false,
@@ -23,6 +25,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return
     }
     const conversationId = nanoid()
+    if (isDev) {
+      console.debug('[chat] sendMessage', { conversationId, content })
+    }
     const userMessage: ChatMessage & { status: MessageStatus } = {
       id: nanoid(),
       role: 'user',
@@ -49,6 +54,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       unlisten = await listen<ChatStreamChunk>('chat:chunk', (event) => {
         const payload = event.payload
+        if (isDev) {
+          console.debug('[chat] chunk', payload)
+        }
         if (payload.conversationId !== conversationId) {
           return
         }
@@ -72,6 +80,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       })
       await streamChat(conversationId, content)
     } catch (error) {
+      if (isDev) {
+        console.debug('[chat] stream error', error)
+      }
       if (unlisten) {
         unlisten()
       }

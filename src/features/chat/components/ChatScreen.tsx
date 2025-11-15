@@ -24,7 +24,7 @@ export function ChatScreen() {
                 className={`max-w-2xl rounded-2xl border px-4 py-2 text-sm ${
                   message.role === 'user'
                     ? 'border-primary/40 bg-primary/10 text-primary-foreground'
-                    : 'border-border bg-card text-card-foreground'
+                    : 'border-border bg-card text-card-foreground display-markdown'
                 } ${message.status === 'error' ? 'border-destructive text-destructive' : ''}`}
               >
                 {message.role === 'assistant' ? (

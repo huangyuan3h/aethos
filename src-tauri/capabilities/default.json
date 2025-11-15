@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schema.tauri.app/capability.json",
+  "identifier": "default",
+  "description": "Default capability configuration for Aethos.",
+  "windows": ["*"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "core:event:allow-listen"
+  ]
+}
+
