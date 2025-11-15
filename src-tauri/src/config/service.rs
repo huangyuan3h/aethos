@@ -26,6 +26,7 @@ pub struct ProviderSummary {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProviderUpsertPayload {
     pub provider: String,
     pub display_name: String,

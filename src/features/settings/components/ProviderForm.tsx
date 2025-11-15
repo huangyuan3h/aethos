@@ -1,7 +1,4 @@
-import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { z } from 'zod'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useEffect, useReducer, useState } from 'react'
 
 import { PROVIDER_OPTIONS } from '../constants'
 import type { ProviderUpsertPayload } from '../types'
@@ -19,99 +16,115 @@ import {
 import { useOnboardingStore } from '@/features/onboarding/state/onboarding.store'
 import { usePreferencesStore } from '@/features/preferences/state/preferences.store'
 
-const schema = z.object({
-  provider: z.enum(['openai', 'openrouter', 'anthropic', 'google']),
-  displayName: z.string().min(2),
-  apiKey: z.string().min(8, 'API key looks too short'),
-  defaultModel: z.string().optional(),
-  makeDefault: z.boolean().optional(),
-})
-
-type FormValues = z.infer<typeof schema>
-
 interface ProviderFormProps {
   onSuccess?: () => void
   variant?: 'default' | 'compact'
 }
 
+type ProviderId = 'openai' | 'openrouter' | 'anthropic' | 'google'
+type FormState = {
+  provider: ProviderId
+  displayName: string
+  apiKey: string
+  defaultModel?: string
+  makeDefault: boolean
+  error?: string
+}
+
+type Action =
+  | { type: 'update'; field: keyof FormState; value: string | boolean | undefined }
+  | { type: 'reset'; payload: FormState }
+  | { type: 'error'; message?: string }
+
+function reducer(state: FormState, action: Action): FormState {
+  switch (action.type) {
+    case 'update':
+      return { ...state, [action.field]: action.value as never, error: undefined }
+    case 'reset':
+      return action.payload
+    case 'error':
+      return { ...state, error: action.message }
+    default:
+      return state
+  }
+}
+
 export function ProviderForm({ onSuccess, variant = 'default' }: ProviderFormProps = {}) {
   const saveProvider = useSettingsStore((state) => state.saveProvider)
-  const isLoading = useSettingsStore((state) => state.isLoading)
   const providers = useSettingsStore((state) => state.providers)
   const closeOnboarding = useOnboardingStore((state) => state.close)
   const markSetupComplete = usePreferencesStore((state) => state.markSetupComplete)
+  const [isSaving, setIsSaving] = useState(false)
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      provider: 'openai',
-      displayName: 'OpenAI',
-      apiKey: '',
-      defaultModel: 'gpt-4o-mini',
-      makeDefault: providers.length === 0,
-    },
+  const [state, dispatch] = useReducer(reducer, {
+    provider: 'openai',
+    displayName: 'OpenAI',
+    apiKey: '',
+    defaultModel: 'gpt-4o-mini',
+    makeDefault: providers.length === 0,
   })
 
   useEffect(() => {
-    form.register('provider')
-  }, [form])
-
-  const [selectedProvider, setSelectedProvider] =
-    useState<FormValues['provider']>(form.getValues('provider'))
-
-  useEffect(() => {
-    const meta = PROVIDER_OPTIONS.find((option) => option.id === selectedProvider)
+    const meta = PROVIDER_OPTIONS.find((option) => option.id === state.provider)
     if (meta) {
-      form.setValue('displayName', meta.label, { shouldValidate: true })
-      form.setValue('defaultModel', meta.defaultModel)
+      dispatch({ type: 'update', field: 'displayName', value: meta.label })
+      dispatch({ type: 'update', field: 'defaultModel', value: meta.defaultModel })
     }
-  }, [selectedProvider, form])
+  }, [state.provider])
 
-  const onSubmit = async (values: FormValues) => {
-    const providerMeta = PROVIDER_OPTIONS.find((option) => option.id === values.provider)
+  const handleSave = async () => {
+    if (isSaving) {
+      return
+    }
+    if (!state.apiKey || state.apiKey.length < 8) {
+      dispatch({ type: 'error', message: 'API key looks too short.' })
+      return
+    }
+    const providerMeta = PROVIDER_OPTIONS.find((option) => option.id === state.provider)
     const payload: ProviderUpsertPayload = {
-      provider: values.provider,
-      displayName: variant === 'compact' ? providerMeta?.label ?? values.displayName : values.displayName,
-      apiKey: values.apiKey,
-      defaultModel: variant === 'compact' ? undefined : values.defaultModel,
-      makeDefault: Boolean(values.makeDefault),
+      provider: state.provider,
+      displayName:
+        variant === 'compact' ? (providerMeta?.label ?? state.displayName) : state.displayName,
+      apiKey: state.apiKey,
+      defaultModel: variant === 'compact' ? undefined : state.defaultModel,
+      makeDefault: state.makeDefault,
     }
-    await saveProvider(payload)
-    form.reset({
-      ...values,
-      apiKey: '',
-      makeDefault: false,
-    })
-    setSelectedProvider(values.provider)
-    markSetupComplete()
-    closeOnboarding()
-    onSuccess?.()
+    setIsSaving(true)
+    try {
+      await saveProvider(payload)
+      dispatch({
+        type: 'reset',
+        payload: {
+          ...state,
+          apiKey: '',
+          makeDefault: false,
+          error: undefined,
+        },
+      })
+      markSetupComplete()
+      closeOnboarding()
+      onSuccess?.()
+    } finally {
+      setIsSaving(false)
+    }
   }
-
-  const handleSave = form.handleSubmit(onSubmit)
 
   return (
     <div className="space-y-4">
       <div className="space-y-1">
         <label className="text-sm font-medium text-foreground">Provider</label>
         <Select
-          value={selectedProvider}
-          onValueChange={(next) => {
-            const typed = next as FormValues['provider']
-            setSelectedProvider(typed)
-            form.setValue('provider', typed, { shouldValidate: true, shouldDirty: true })
-          }}
+          value={state.provider}
+          onValueChange={(value) =>
+            dispatch({ type: 'update', field: 'provider', value: value as ProviderId })
+          }
         >
           <SelectTrigger>
             <SelectValue placeholder="Choose a provider" />
           </SelectTrigger>
           <SelectContent>
             {PROVIDER_OPTIONS.map((option) => (
-              <SelectItem
-                key={option.id}
-                value={option.id}
-                className="flex-col items-start gap-0"
-              >
+              <SelectItem key={option.id} value={option.id} className="flex-col items-start gap-0">
                 <span className="font-medium">{option.label}</span>
                 <span className="text-xs text-muted-foreground">{option.hint}</span>
               </SelectItem>
@@ -125,7 +138,10 @@ export function ProviderForm({ onSuccess, variant = 'default' }: ProviderFormPro
           <label className="text-sm font-medium text-foreground">Display name</label>
           <Input
             placeholder="OpenAI"
-            {...form.register('displayName')}
+            value={state.displayName}
+            onChange={(event) =>
+              dispatch({ type: 'update', field: 'displayName', value: event.target.value })
+            }
           />
         </div>
       ) : null}
@@ -134,11 +150,12 @@ export function ProviderForm({ onSuccess, variant = 'default' }: ProviderFormPro
         <label className="text-sm font-medium text-foreground">API Key</label>
         <Textarea
           placeholder="sk-..."
-          {...form.register('apiKey')}
+          value={state.apiKey}
+          onChange={(event) =>
+            dispatch({ type: 'update', field: 'apiKey', value: event.target.value })
+          }
         />
-        {form.formState.errors.apiKey && (
-          <p className="text-xs text-destructive">{form.formState.errors.apiKey.message}</p>
-        )}
+        {state.error ? <p className="text-xs text-destructive">{state.error}</p> : null}
       </div>
 
       {variant === 'default' ? (
@@ -146,7 +163,10 @@ export function ProviderForm({ onSuccess, variant = 'default' }: ProviderFormPro
           <label className="text-sm font-medium text-foreground">Preferred model</label>
           <Input
             placeholder="gpt-4o-mini"
-            {...form.register('defaultModel')}
+            value={state.defaultModel ?? ''}
+            onChange={(event) =>
+              dispatch({ type: 'update', field: 'defaultModel', value: event.target.value })
+            }
           />
         </div>
       ) : null}
@@ -155,20 +175,17 @@ export function ProviderForm({ onSuccess, variant = 'default' }: ProviderFormPro
         <input
           type="checkbox"
           className="h-4 w-4 rounded border border-input"
-          {...form.register('makeDefault')}
+          checked={state.makeDefault}
+          onChange={(event) =>
+            dispatch({ type: 'update', field: 'makeDefault', value: event.target.checked })
+          }
         />
         Make this the default provider
       </label>
 
-      <Button
-        className="w-full"
-        disabled={isLoading}
-        type="button"
-        onClick={handleSave}
-      >
-        {isLoading ? 'Saving...' : 'Save provider'}
+      <Button className="w-full" disabled={isSaving} type="button" onClick={handleSave}>
+        {isSaving ? 'Saving...' : 'Save provider'}
       </Button>
     </div>
   )
 }
-

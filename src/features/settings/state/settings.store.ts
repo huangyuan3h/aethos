@@ -41,7 +41,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     }
   },
   async saveProvider(payload) {
-    set({ error: undefined })
+    set({ error: undefined, onboardingNeeded: false, isSettingsOpen: false })
     await invoke('upsert_provider', { payload })
     await get().fetchProviders()
   },
