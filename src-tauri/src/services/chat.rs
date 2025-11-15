@@ -36,6 +36,13 @@ pub struct ChatStreamChunk {
     pub model: Option<String>,
 }
 
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationTitleEvent {
+    pub conversation_id: String,
+    pub title: String,
+}
+
 #[derive(Debug, Error)]
 pub enum ChatError {
     #[error("{0}")]
@@ -162,6 +169,8 @@ async fn stream_openai(
         .build()
         .map_err(|err| ChatError::Network(err.to_string()))?;
 
+    let original_prompt = request.prompt.clone();
+
     let body = OpenAiRequest {
         model: model.clone(),
         messages: vec![OpenAiMessage {
@@ -222,6 +231,14 @@ async fn stream_openai(
                 config
                     .record_message(&conversation_id, "assistant", &assistant_reply)
                     .await?;
+                generate_conversation_title(
+                    window,
+                    config,
+                    conversation_id.clone(),
+                    original_prompt,
+                    assistant_reply.clone(),
+                )
+                .await?;
                 return Ok(());
             }
 
@@ -254,6 +271,116 @@ async fn stream_openai(
 
     warn!("stream ended without completion");
     Err(ChatError::EmptyResponse)
+}
+
+async fn generate_conversation_title(
+    window: &tauri::Window,
+    config: &ConfigService,
+    conversation_id: String,
+    user_prompt: String,
+    assistant_reply: String,
+) -> Result<(), ChatError> {
+    let conversation = match config.get_conversation(&conversation_id).await {
+        Ok(summary) => summary,
+        Err(err) => return Err(ChatError::Config(err)),
+    };
+
+    if conversation.title != "New chat" {
+        return Ok(());
+    }
+
+    let title_prompt = format!(
+        "You are a helpful assistant that generates concise titles for chat conversations. \
+Return a short title (max 6 words) that summarizes this exchange. Do not add quotes.\n\
+User: {}\nAssistant: {}",
+        user_prompt.trim(),
+        assistant_reply.trim()
+    );
+
+    let title = request_title_completion(config, title_prompt).await?;
+    let trimmed = title.trim().trim_matches('"').to_string();
+    if trimmed.is_empty() {
+        return Ok(());
+    }
+
+    let updated = config
+        .rename_conversation(&conversation_id, &trimmed)
+        .await?;
+    window
+        .emit(
+            "conversation:title",
+            ConversationTitleEvent {
+                conversation_id: updated.id,
+                title: updated.title,
+            },
+        )
+        .map_err(|err| ChatError::Network(err.to_string()))?;
+
+    Ok(())
+}
+
+async fn request_title_completion(
+    config: &ConfigService,
+    prompt: String,
+) -> Result<String, ChatError> {
+    let credential = config.default_provider_credentials().await?;
+    let model = credential
+        .default_model
+        .clone()
+        .unwrap_or_else(|| "gpt-4o-mini".to_string());
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|err| ChatError::Network(err.to_string()))?;
+
+    let body = OpenAiRequest {
+        model: model.clone(),
+        messages: vec![
+            OpenAiMessage {
+                role: "system".into(),
+                content: "You generate succinct descriptive titles for chat conversations.".into(),
+            },
+            OpenAiMessage {
+                role: "user".into(),
+                content: prompt,
+            },
+        ],
+        stream: None,
+    };
+
+    let response = client
+        .post(OPENAI_CHAT_ENDPOINT)
+        .bearer_auth(&credential.api_key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|err| ChatError::Network(err.to_string()))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "unknown error".to_string());
+        return Err(ChatError::Provider {
+            status,
+            message: text,
+        });
+    }
+
+    let payload: OpenAiResponse = response
+        .json()
+        .await
+        .map_err(|err| ChatError::Network(err.to_string()))?;
+
+    let reply = payload
+        .choices
+        .into_iter()
+        .find_map(|choice| choice.message.and_then(|m| m.content))
+        .ok_or(ChatError::EmptyResponse)?;
+
+    Ok(reply)
 }
 
 #[derive(Debug, Serialize)]
