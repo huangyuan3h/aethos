@@ -98,6 +98,30 @@ export const THEME_VARIABLES: ThemeVariableDefinition[] = [
     group: 'accents',
   },
   {
+    id: 'active',
+    label: 'Active surface',
+    description: 'Highlighted states for selections and menus.',
+    group: 'accents',
+  },
+  {
+    id: 'active-foreground',
+    label: 'Active text',
+    description: 'Text on highlighted states.',
+    group: 'accents',
+  },
+  {
+    id: 'link',
+    label: 'Link',
+    description: 'Color for inline links and interactive text.',
+    group: 'accents',
+  },
+  {
+    id: 'link-foreground',
+    label: 'Link text',
+    description: 'Text on link backgrounds (used for badges).',
+    group: 'accents',
+  },
+  {
     id: 'ring',
     label: 'Focus ring',
     description: 'Outline for focused inputs.',

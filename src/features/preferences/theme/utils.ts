@@ -1,23 +1,21 @@
-import {
-  DEFAULT_DARK_PRESET_ID,
-  DEFAULT_LIGHT_PRESET_ID,
-  getDefaultPresetForMode,
-  getThemePresetById,
-} from './presets'
+import { BUILTIN_THEMES, DEFAULT_DARK_THEME_ID, DEFAULT_LIGHT_THEME_ID, getDefaultThemeForMode } from './presets'
 import type {
-  ResolvedTheme,
   ThemeCustomTokens,
   ThemeMode,
-  ThemePreset,
+  ThemeProfile,
   ThemeTokens,
   ThemeTokenName,
+  ThemeTypography,
 } from './types'
 
-export function resolveThemeTokens(
-  preset: ThemePreset,
-  overrides?: ThemeCustomTokens,
-): ThemeTokens {
-  const tokens: ThemeTokens = { ...preset.tokens }
+const TYPOGRAPHY_LIMITS = {
+  baseSize: { min: 12, max: 22 },
+  headingScale: { min: 1.1, max: 1.6 },
+  lineHeight: { min: 1.3, max: 1.9 },
+}
+
+export function mergeTokens(base: ThemeTokens, overrides?: ThemeCustomTokens): ThemeTokens {
+  const tokens: ThemeTokens = { ...base }
   if (overrides) {
     for (const [key, value] of Object.entries(overrides)) {
       if (value && key in tokens) {
@@ -28,16 +26,20 @@ export function resolveThemeTokens(
   return tokens
 }
 
-export function applyThemeToDocument(theme: ResolvedTheme) {
+export function applyThemeProfile(profile: ThemeProfile) {
   const root = document.documentElement
-  if (theme.mode === 'dark') {
+  if (profile.mode === 'dark') {
     root.classList.add('dark')
   } else {
     root.classList.remove('dark')
   }
-  Object.entries(theme.tokens).forEach(([token, value]) => {
+  Object.entries(profile.tokens).forEach(([token, value]) => {
     root.style.setProperty(`--${token}`, value)
   })
+  root.style.setProperty('--font-base-size', `${profile.typography.baseSize}px`)
+  root.style.setProperty('--font-heading-scale', profile.typography.headingScale.toString())
+  root.style.setProperty('--line-height-base', profile.typography.lineHeight.toString())
+  root.style.fontSize = `${profile.typography.baseSize}px`
 }
 
 export function parseThemeCustom(raw?: string | null): ThemeCustomTokens | undefined {
@@ -62,18 +64,97 @@ export function serializeCustomTokens(overrides: ThemeCustomTokens | undefined):
   return JSON.stringify(overrides)
 }
 
-export function ensureThemePreset(mode: ThemeMode, presetId?: string | null): ThemePreset {
-  if (presetId) {
-    const preset = getThemePresetById(presetId)
-    if (preset) {
-      return preset
-    }
+export function parseThemeLibrary(raw?: string | null): ThemeProfile[] {
+  if (!raw) {
+    return []
   }
-  return getDefaultPresetForMode(mode)
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((entry) => normalizeStoredProfile(entry))
+        .filter((entry): entry is ThemeProfile => Boolean(entry))
+    }
+  } catch {
+    return []
+  }
+  return []
 }
 
-export function getDefaultPresetIdForMode(mode: ThemeMode): string {
-  return mode === 'dark' ? DEFAULT_DARK_PRESET_ID : DEFAULT_LIGHT_PRESET_ID
+function normalizeStoredProfile(entry: unknown): ThemeProfile | undefined {
+  if (!entry || typeof entry !== 'object') {
+    return undefined
+  }
+  const candidate = entry as Record<string, unknown>
+  if (
+    typeof candidate.id !== 'string' ||
+    typeof candidate.name !== 'string' ||
+    (candidate.mode !== 'light' && candidate.mode !== 'dark')
+  ) {
+    return undefined
+  }
+
+  const fallback = getDefaultThemeForMode(candidate.mode)
+  const storedTokens = candidate.tokens as Record<string, string> | undefined
+  const tokens: ThemeTokens = { ...fallback.tokens }
+  if (storedTokens) {
+    for (const [key, value] of Object.entries(storedTokens)) {
+      if (typeof value === 'string' && key in tokens) {
+        tokens[key as ThemeTokenName] = value
+      }
+    }
+  }
+
+  const storedTypography = candidate.typography as Partial<ThemeTypography> | undefined
+  const typography: ThemeTypography = {
+    baseSize: clamp(
+      storedTypography?.baseSize ?? fallback.typography.baseSize,
+      TYPOGRAPHY_LIMITS.baseSize.min,
+      TYPOGRAPHY_LIMITS.baseSize.max,
+    ),
+    headingScale: clamp(
+      storedTypography?.headingScale ?? fallback.typography.headingScale,
+      TYPOGRAPHY_LIMITS.headingScale.min,
+      TYPOGRAPHY_LIMITS.headingScale.max,
+    ),
+    lineHeight: clamp(
+      storedTypography?.lineHeight ?? fallback.typography.lineHeight,
+      TYPOGRAPHY_LIMITS.lineHeight.min,
+      TYPOGRAPHY_LIMITS.lineHeight.max,
+    ),
+  }
+
+  return {
+    id: candidate.id,
+    name: candidate.name,
+    mode: candidate.mode,
+    tokens,
+    typography,
+  }
+}
+
+export function serializeThemeLibrary(profiles: ThemeProfile[]): string {
+  return JSON.stringify(
+    profiles.map((profile) => ({
+      id: profile.id,
+      name: profile.name,
+      mode: profile.mode,
+      tokens: profile.tokens,
+      typography: profile.typography,
+    })),
+  )
+}
+
+export function getDefaultThemeIdForMode(mode: ThemeMode): string {
+  return mode === 'dark' ? DEFAULT_DARK_THEME_ID : DEFAULT_LIGHT_THEME_ID
+}
+
+export function getAllThemes(customThemes: ThemeProfile[]): ThemeProfile[] {
+  return [...BUILTIN_THEMES, ...customThemes]
+}
+
+export function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
 }
 
 export function hslToHex(value: string | undefined): string {

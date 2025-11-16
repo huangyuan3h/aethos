@@ -20,6 +20,10 @@ export type ThemeTokenName =
   | 'destructive'
   | 'destructive-foreground'
   | 'ring'
+  | 'active'
+  | 'active-foreground'
+  | 'link'
+  | 'link-foreground'
 
 export type ThemeTokens = Record<ThemeTokenName, string>
 
@@ -33,9 +37,35 @@ export interface ThemePreset {
   tokens: ThemeTokens
 }
 
+export interface ThemeTypography {
+  baseSize: number
+  headingScale: number
+  lineHeight: number
+}
+
+export interface ThemeProfile {
+  id: string
+  name: string
+  mode: ThemeMode
+  tokens: ThemeTokens
+  typography: ThemeTypography
+  isBuiltin?: boolean
+}
+
+export type ThemeProfileDTO = Omit<ThemeProfile, 'isBuiltin'>
+
+export interface StoredThemeProfile {
+  id: string
+  name: string
+  mode: ThemeMode
+  tokens: ThemeTokens
+  typography: ThemeTypography
+}
+
 export interface ResolvedTheme {
   mode: ThemeMode
   tokens: ThemeTokens
+  typography: ThemeTypography
 }
 
 export interface ThemeVariableDefinition {

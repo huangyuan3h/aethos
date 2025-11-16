@@ -76,6 +76,8 @@ pub struct UserPreferences {
     pub theme_mode: Option<String>,
     pub theme_preset: Option<String>,
     pub theme_custom: Option<String>,
+    pub theme_active_id: Option<String>,
+    pub theme_library: Option<String>,
     pub system_prompt: Option<String>,
 }
 
@@ -196,6 +198,8 @@ pub struct PreferencesUpdate {
     pub theme_mode: Option<String>,
     pub theme_preset: Option<String>,
     pub theme_custom: Option<String>,
+    pub theme_active_id: Option<String>,
+    pub theme_library: Option<String>,
     #[serde(default)]
     pub system_prompt: Option<String>,
 }
@@ -223,6 +227,8 @@ impl ConfigService {
             theme_mode,
             theme_preset: self.get_setting("ui.themePreset").await?,
             theme_custom: self.get_setting("ui.themeCustom").await?,
+            theme_active_id: self.get_setting("ui.themeActiveId").await?,
+            theme_library: self.get_setting("ui.themeLibrary").await?,
             system_prompt: self.get_setting("chat.systemPrompt").await?,
         })
     }
@@ -243,6 +249,14 @@ impl ConfigService {
         }
         if let Some(theme_custom) = prefs.theme_custom {
             self.set_setting("ui.themeCustom", &theme_custom, false)
+                .await?;
+        }
+        if let Some(active_id) = prefs.theme_active_id {
+            self.set_setting("ui.themeActiveId", &active_id, false)
+                .await?;
+        }
+        if let Some(library) = prefs.theme_library {
+            self.set_setting("ui.themeLibrary", &library, false)
                 .await?;
         }
         if let Some(prompt) = prefs.system_prompt {

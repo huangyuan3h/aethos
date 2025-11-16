@@ -1,28 +1,17 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { usePreferencesStore } from '@/features/preferences/state/preferences.store'
 import { useOnboardingStore } from '@/features/onboarding/state/onboarding.store'
 import { useSettingsStore } from '@/features/settings/state/settings.store'
 import { ProviderForm } from '@/features/settings/components/ProviderForm'
 import { Button } from '@/components/ui/button'
-import { getDefaultPresetForMode } from '@/features/preferences/theme/presets'
-import type { ThemeMode } from '@/features/preferences/theme/types'
+import { cn } from '@/lib/utils'
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
   { code: 'zh-CN', label: '简体中文' },
   { code: 'fr-FR', label: 'Français' },
 ] as const
-
-const DEFAULT_THEME_CHOICES = ['light', 'dark'].map((mode) => {
-  const preset = getDefaultPresetForMode(mode as ThemeMode)
-  return {
-    mode: preset.mode,
-    label: preset.label,
-    description: preset.description,
-    preset,
-  }
-})
 
 export function OnboardingWizard() {
   const isOpen = useOnboardingStore((state) => state.isOpen)
@@ -35,22 +24,26 @@ export function OnboardingWizard() {
 
   const [step, setStep] = useState(0)
   const [language, setLanguage] = useState<'en' | 'zh-CN' | 'fr-FR'>('en')
-  const [theme, setTheme] = useState<ThemeMode>('light')
+  const builtinThemes = usePreferencesStore((state) => state.builtinThemes)
+  const customThemes = usePreferencesStore((state) => state.customThemes)
+  const activeThemeId = usePreferencesStore((state) => state.activeThemeId)
+  const setActiveTheme = usePreferencesStore((state) => state.setActiveTheme)
   const applyLanguage = usePreferencesStore((state) => state.applyLanguage)
-  const applyTheme = usePreferencesStore((state) => state.applyTheme)
+  const themeOptions = useMemo(() => [...builtinThemes, ...customThemes], [builtinThemes, customThemes])
+  const [selectedThemeId, setSelectedThemeId] = useState<string | undefined>(undefined)
+  const resolvedThemeId = selectedThemeId ?? activeThemeId ?? themeOptions[0]?.id
 
   if (!isOpen) {
     return null
   }
 
   const handlePreferencesComplete = async () => {
-    const preset = getDefaultPresetForMode(theme)
     await savePreferences({
       language,
-      themeMode: theme,
-      themePreset: preset.id,
-      customTheme: {},
     })
+    if (resolvedThemeId) {
+      await setActiveTheme(resolvedThemeId)
+    }
   }
 
   const handleFinish = async () => {
@@ -110,18 +103,23 @@ export function OnboardingWizard() {
             title="Select a theme"
             description="Pick the default look and feel. You can switch later."
           >
-            <div className="grid grid-cols-2 gap-4">
-              {DEFAULT_THEME_CHOICES.map((option) => (
+            <div className="grid gap-4 md:grid-cols-2">
+              {themeOptions.map((option) => (
                 <button
-                  key={option.preset.id}
-                  className={`rounded-2xl border p-4 text-left ${theme === option.mode ? 'border-primary bg-primary/10' : 'border-border'}`}
+                  key={option.id}
+                  className={cn(
+                    'rounded-2xl border p-4 text-left transition',
+                    resolvedThemeId === option.id ? 'border-primary bg-primary/10' : 'border-border',
+                  )}
                   onClick={() => {
-                    setTheme(option.mode)
-                    applyTheme({ mode: option.mode, tokens: option.preset.tokens })
+                    setSelectedThemeId(option.id)
+                    void setActiveTheme(option.id)
                   }}
                 >
-                  <p className="text-lg font-semibold">{option.label}</p>
-                  <p className="text-xs text-muted-foreground">{option.description}</p>
+                  <p className="text-lg font-semibold">{option.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {option.mode === 'dark' ? 'Dark' : 'Light'}
+                  </p>
                 </button>
               ))}
             </div>

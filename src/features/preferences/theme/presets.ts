@@ -1,6 +1,8 @@
-import type { ThemeMode, ThemePreset, ThemeTokens } from './types'
+import { nanoid } from 'nanoid'
 
-const auroraLight: ThemeTokens = {
+import type { ThemeMode, ThemeProfile, ThemeTokens, ThemeTypography } from './types'
+
+const auroraLightTokens: ThemeTokens = {
   background: '0 0% 100%',
   foreground: '222 47% 11%',
   muted: '214 44% 96%',
@@ -20,21 +22,25 @@ const auroraLight: ThemeTokens = {
   destructive: '0 84% 60%',
   'destructive-foreground': '0 0% 100%',
   ring: '221 83% 53%',
+  active: '255 90% 65%',
+  'active-foreground': '0 0% 100%',
+  link: '220 90% 56%',
+  'link-foreground': '210 40% 98%',
 }
 
-const nocturneDark: ThemeTokens = {
+const nocturneDarkTokens: ThemeTokens = {
   background: '222 84% 5%',
-  foreground: '210 40% 98%',
+  foreground: '210 40% 96%',
   muted: '217 25% 14%',
   'muted-foreground': '215 20% 72%',
   popover: '222 84% 4%',
-  'popover-foreground': '210 40% 98%',
-  card: '222 84% 6%',
-  'card-foreground': '210 40% 98%',
+  'popover-foreground': '210 40% 96%',
+  card: '222 84% 7%',
+  'card-foreground': '210 40% 96%',
   border: '217 34% 20%',
   input: '217 34% 20%',
   primary: '214 96% 62%',
-  'primary-foreground': '222 47% 12%',
+  'primary-foreground': '210 40% 96%',
   secondary: '222 23% 18%',
   'secondary-foreground': '210 40% 96%',
   accent: '180 72% 66%',
@@ -42,105 +48,62 @@ const nocturneDark: ThemeTokens = {
   destructive: '0 63% 48%',
   'destructive-foreground': '210 40% 98%',
   ring: '214 96% 62%',
+  active: '266 84% 70%',
+  'active-foreground': '222 84% 5%',
+  link: '198 94% 67%',
+  'link-foreground': '222 84% 4%',
 }
 
-const dawnWarm: ThemeTokens = {
-  background: '24 60% 97%',
-  foreground: '18 35% 20%',
-  muted: '25 45% 92%',
-  'muted-foreground': '20 22% 45%',
-  popover: '24 65% 98%',
-  'popover-foreground': '18 35% 22%',
-  card: '24 60% 99%',
-  'card-foreground': '18 35% 20%',
-  border: '20 35% 90%',
-  input: '20 35% 90%',
-  primary: '12 74% 55%',
-  'primary-foreground': '0 0% 100%',
-  secondary: '38 80% 80%',
-  'secondary-foreground': '20 30% 20%',
-  accent: '345 75% 60%',
-  'accent-foreground': '0 0% 100%',
-  destructive: '2 84% 58%',
-  'destructive-foreground': '0 0% 100%',
-  ring: '12 74% 55%',
+const defaultTypography: ThemeTypography = {
+  baseSize: 16,
+  headingScale: 1.25,
+  lineHeight: 1.6,
 }
 
-const midnightNeon: ThemeTokens = {
-  background: '240 27% 6%',
-  foreground: '220 25% 96%',
-  muted: '240 15% 14%',
-  'muted-foreground': '220 20% 75%',
-  popover: '240 27% 8%',
-  'popover-foreground': '220 25% 96%',
-  card: '240 27% 9%',
-  'card-foreground': '220 25% 96%',
-  border: '240 20% 18%',
-  input: '240 20% 18%',
-  primary: '282 83% 67%',
-  'primary-foreground': '264 45% 12%',
-  secondary: '200 80% 45%',
-  'secondary-foreground': '210 25% 12%',
-  accent: '145 70% 52%',
-  'accent-foreground': '180 30% 10%',
-  destructive: '0 70% 50%',
-  'destructive-foreground': '0 0% 100%',
-  ring: '282 83% 67%',
+const headingForwardTypography: ThemeTypography = {
+  baseSize: 15,
+  headingScale: 1.3,
+  lineHeight: 1.7,
 }
 
-export const THEME_PRESETS: ThemePreset[] = [
+export const DEFAULT_LIGHT_THEME_ID = 'aurora-light'
+export const DEFAULT_DARK_THEME_ID = 'nocturne-dark'
+
+export const BUILTIN_THEMES: ThemeProfile[] = [
   {
-    id: 'aurora-light',
-    label: 'Aurora Light',
-    description: 'Bright neutral surfaces with cool blue accents.',
+    id: DEFAULT_LIGHT_THEME_ID,
+    name: 'Aurora Light',
     mode: 'light',
-    tokens: auroraLight,
+    tokens: auroraLightTokens,
+    typography: defaultTypography,
+    isBuiltin: true,
   },
   {
-    id: 'nocturne-dark',
-    label: 'Nocturne Dark',
-    description: 'High-contrast layout tuned for dim environments.',
+    id: DEFAULT_DARK_THEME_ID,
+    name: 'Nocturne Dark',
     mode: 'dark',
-    tokens: nocturneDark,
-  },
-  {
-    id: 'dawn-warm',
-    label: 'Dawn Warm',
-    description: 'Soft warm palette inspired by sunrise tones.',
-    mode: 'light',
-    tokens: dawnWarm,
-  },
-  {
-    id: 'midnight-neon',
-    label: 'Midnight Neon',
-    description: 'Moody dark surfaces with neon highlights.',
-    mode: 'dark',
-    tokens: midnightNeon,
+    tokens: nocturneDarkTokens,
+    typography: headingForwardTypography,
+    isBuiltin: true,
   },
 ]
 
-export const DEFAULT_LIGHT_PRESET_ID = 'aurora-light'
-export const DEFAULT_DARK_PRESET_ID = 'nocturne-dark'
-
-export function getThemePresetById(id?: string | null): ThemePreset | undefined {
-  if (!id) {
-    return undefined
+export function getDefaultThemeForMode(mode: ThemeMode): ThemeProfile {
+  if (mode === 'dark') {
+    return BUILTIN_THEMES.find((theme) => theme.mode === 'dark') ?? BUILTIN_THEMES[0]
   }
-  return THEME_PRESETS.find((preset) => preset.id === id)
+  return BUILTIN_THEMES.find((theme) => theme.mode === 'light') ?? BUILTIN_THEMES[0]
 }
 
-export function getDefaultPresetForMode(mode: ThemeMode): ThemePreset {
-  if (mode === 'dark') {
-    return (
-      getThemePresetById(DEFAULT_DARK_PRESET_ID) ??
-      THEME_PRESETS.find((preset) => preset.mode === 'dark') ??
-      THEME_PRESETS[0]
-    )
+export function createThemeFromBase(base: ThemeProfile, overrides?: Partial<ThemeProfile>): ThemeProfile {
+  return {
+    ...base,
+    ...overrides,
+    id: overrides?.id ?? nanoid(),
+    name: overrides?.name ?? `${base.name} copy`,
+    tokens: { ...base.tokens, ...(overrides?.tokens ?? {}) },
+    typography: { ...base.typography, ...(overrides?.typography ?? {}) },
+    isBuiltin: overrides?.isBuiltin ?? false,
   }
-  return (
-    getThemePresetById(DEFAULT_LIGHT_PRESET_ID) ??
-    THEME_PRESETS.find((preset) => preset.mode === 'light') ??
-    THEME_PRESETS[0]
-  )
 }
 

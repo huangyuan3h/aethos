@@ -1,56 +1,81 @@
 import { create } from 'zustand'
 import { invoke } from '@tauri-apps/api/core'
+import { nanoid } from 'nanoid'
 
 import {
-  DEFAULT_DARK_PRESET_ID,
-  DEFAULT_LIGHT_PRESET_ID,
-  getDefaultPresetForMode,
+  BUILTIN_THEMES,
+  createThemeFromBase,
+  getDefaultThemeForMode,
 } from '@/features/preferences/theme/presets'
 import {
-  applyThemeToDocument,
-  ensureThemePreset,
+  applyThemeProfile,
+  getAllThemes,
+  mergeTokens,
   parseThemeCustom,
-  resolveThemeTokens,
-  serializeCustomTokens,
+  parseThemeLibrary,
+  serializeThemeLibrary,
 } from '@/features/preferences/theme/utils'
-import type { ThemeCustomTokens, ThemeMode, ThemeTokens } from '@/features/preferences/theme/types'
+import type {
+  ThemeMode,
+  ThemeProfile,
+  ThemeTokens,
+  ThemeTypography,
+} from '@/features/preferences/theme/types'
 
 type LanguageOption = 'en' | 'zh-CN' | 'fr-FR'
 
 interface SavePreferencesInput {
   language?: LanguageOption
   systemPrompt?: string
-  themeMode?: ThemeMode
-  themePreset?: string
-  customTheme?: ThemeCustomTokens
 }
 
 interface PreferencesState {
   language?: LanguageOption
-  themeMode?: ThemeMode
-  themePreset?: string
-  themeCustom?: ThemeCustomTokens
-  themeTokens?: ThemeTokens
   systemPrompt?: string
   isLoaded: boolean
   needsSetup: boolean
   error?: string
+  themeMode?: ThemeMode
+  activeThemeId?: string
+  builtinThemes: ThemeProfile[]
+  customThemes: ThemeProfile[]
   fetchPreferences: () => Promise<void>
   savePreferences: (input: SavePreferencesInput) => Promise<void>
   applyLanguage: (language: LanguageOption) => void
-  applyTheme: (theme: ThemeMode | { mode: ThemeMode; tokens?: ThemeTokens }) => void
+  setActiveTheme: (id: string) => Promise<void>
+  createTheme: (payload: ThemeCreationPayload) => Promise<ThemeProfile>
+  updateTheme: (id: string, payload: ThemeUpdatePayload) => Promise<void>
+  deleteTheme: (id: string) => Promise<void>
+  duplicateTheme: (id: string, name?: string) => Promise<ThemeProfile | undefined>
   markSetupComplete: () => void
+}
+
+interface ThemeCreationPayload {
+  baseThemeId?: string
+  name?: string
+  mode?: ThemeMode
+}
+
+interface ThemeUpdatePayload {
+  name?: string
+  mode?: ThemeMode
+  tokens?: ThemeTokens
+  typography?: ThemeTypography
+}
+
+async function persistThemePreferences(update: Record<string, unknown>) {
+  await invoke('save_preferences', { update })
 }
 
 export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   language: undefined,
   themeMode: undefined,
-  themePreset: undefined,
-  themeCustom: undefined,
-  themeTokens: undefined,
   systemPrompt: undefined,
   isLoaded: false,
   needsSetup: true,
+  activeThemeId: undefined,
+  builtinThemes: BUILTIN_THEMES,
+  customThemes: [],
   async fetchPreferences() {
     try {
       const response = await invoke<{
@@ -58,38 +83,62 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
           language?: string
           theme?: string
           themeMode?: string
-          themePreset?: string
           themeCustom?: string
+          themeActiveId?: string
+          themeLibrary?: string
           systemPrompt?: string
         }
       }>('get_preferences')
       const language = (response.preferences.language as LanguageOption | undefined) ?? undefined
+      const systemPrompt = response.preferences.systemPrompt ?? undefined
       const themeMode =
         (response.preferences.themeMode as ThemeMode | undefined) ??
         (response.preferences.theme as ThemeMode | undefined) ??
         'light'
-      const presetId =
+
+      let customThemes = parseThemeLibrary(response.preferences.themeLibrary)
+      if (!customThemes.length) {
+        const overrides = parseThemeCustom(response.preferences.themeCustom)
+        if (overrides) {
+          const base = getDefaultThemeForMode(themeMode)
+          customThemes = [
+            createThemeFromBase(base, {
+              id: nanoid(),
+              name: `${base.name} custom`,
+              tokens: mergeTokens(base.tokens, overrides),
+              isBuiltin: false,
+            }),
+          ]
+        }
+      }
+
+      const requestedThemeId =
+        response.preferences.themeActiveId ??
         response.preferences.themePreset ??
-        (themeMode === 'dark' ? DEFAULT_DARK_PRESET_ID : DEFAULT_LIGHT_PRESET_ID)
-      const customTheme = parseThemeCustom(response.preferences.themeCustom)
-      const preset = ensureThemePreset(themeMode, presetId)
-      const tokens = resolveThemeTokens(preset, customTheme)
-      const systemPrompt = response.preferences.systemPrompt ?? undefined
+        (themeMode === 'dark'
+          ? BUILTIN_THEMES.find((theme) => theme.mode === 'dark')?.id
+          : BUILTIN_THEMES.find((theme) => theme.mode === 'light')?.id) ??
+        BUILTIN_THEMES[0].id
+
+      const availableThemes = getAllThemes(customThemes)
+      let activeTheme = availableThemes.find((theme) => theme.id === requestedThemeId)
+      if (!activeTheme) {
+        activeTheme = getDefaultThemeForMode(themeMode)
+      }
 
       set({
         language,
-        themeMode,
-        themePreset: preset.id,
-        themeCustom: customTheme,
-        themeTokens: tokens,
         systemPrompt,
+        themeMode: activeTheme.mode,
+        activeThemeId: activeTheme.id,
+        customThemes,
         isLoaded: true,
-        needsSetup: !language || !themeMode,
+        needsSetup: !language,
       })
       if (language) {
         get().applyLanguage(language)
       }
-      get().applyTheme({ mode: themeMode, tokens })
+      applyThemeProfile(activeTheme)
     } catch (error) {
       set({ error: (error as Error).message, isLoaded: true, needsSetup: true })
     }
@@ -103,75 +152,117 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     if (input.systemPrompt !== undefined) {
       updatePayload.systemPrompt = input.systemPrompt
     }
-    if (input.themeMode !== undefined) {
-      updatePayload.theme = input.themeMode
-      updatePayload.themeMode = input.themeMode
-    }
-    if (input.themePreset !== undefined) {
-      updatePayload.themePreset = input.themePreset
-    }
-    if (input.customTheme !== undefined) {
-      updatePayload.themeCustom = serializeCustomTokens(
-        Object.keys(input.customTheme).length ? input.customTheme : {},
-      )
-    }
-
     if (Object.keys(updatePayload).length === 0) {
       return
     }
-
-    await invoke('save_preferences', {
-      update: updatePayload,
-    })
-
+    await persistThemePreferences(updatePayload)
     const nextLanguage = input.language ?? state.language
-    const nextThemeMode = input.themeMode ?? state.themeMode
-    const nextSystemPrompt = input.systemPrompt ?? state.systemPrompt
-
     set({
       language: nextLanguage,
-      systemPrompt: nextSystemPrompt,
-      needsSetup: !nextLanguage || !nextThemeMode,
+      systemPrompt: input.systemPrompt ?? state.systemPrompt,
+      needsSetup: !nextLanguage,
     })
-
-    if (input.language !== undefined && nextLanguage) {
-      get().applyLanguage(nextLanguage)
-    }
-
-    if (
-      input.themeMode !== undefined ||
-      input.themePreset !== undefined ||
-      input.customTheme !== undefined
-    ) {
-      const mode = nextThemeMode ?? 'light'
-      const presetId =
-        input.themePreset ??
-        state.themePreset ??
-        (mode === 'dark' ? DEFAULT_DARK_PRESET_ID : DEFAULT_LIGHT_PRESET_ID)
-      const preset = ensureThemePreset(mode, presetId)
-      const customTheme = input.customTheme ?? state.themeCustom ?? undefined
-      const tokens = resolveThemeTokens(preset, customTheme)
-      set({
-        themeMode: mode,
-        themePreset: preset.id,
-        themeCustom: customTheme,
-        themeTokens: tokens,
-      })
-      get().applyTheme({ mode, tokens })
+    if (input.language) {
+      get().applyLanguage(input.language)
     }
   },
   applyLanguage(language) {
     document.documentElement.lang = language
   },
-  applyTheme(theme) {
-    if (typeof theme === 'string') {
-      const preset = getDefaultPresetForMode(theme)
-      applyThemeToDocument({ mode: theme, tokens: preset.tokens })
+  async setActiveTheme(id) {
+    const state = get()
+    const theme = getAllThemes(state.customThemes).find((item) => item.id === id)
+    if (!theme) {
       return
     }
-    const tokens =
-      theme.tokens ?? resolveThemeTokens(getDefaultPresetForMode(theme.mode), undefined)
-    applyThemeToDocument({ mode: theme.mode, tokens })
+    set({ activeThemeId: id, themeMode: theme.mode })
+    applyThemeProfile(theme)
+    await persistThemePreferences({
+      themeActiveId: id,
+      themeMode: theme.mode,
+    })
+  },
+  async createTheme({ baseThemeId, name, mode }) {
+    const state = get()
+    const base =
+      getAllThemes(state.customThemes).find((theme) => theme.id === baseThemeId) ??
+      getDefaultThemeForMode(mode ?? state.themeMode ?? 'light')
+    const newTheme = createThemeFromBase(base, {
+      id: nanoid(),
+      name: name ?? `${base.name} ${state.customThemes.length + 1}`,
+      mode: mode ?? base.mode,
+      isBuiltin: false,
+    })
+    const customThemes = [...state.customThemes, newTheme]
+    set({ customThemes })
+    await persistThemePreferences({
+      themeLibrary: serializeThemeLibrary(customThemes),
+    })
+    return newTheme
+  },
+  async updateTheme(id, payload) {
+    const state = get()
+    const customThemes = state.customThemes.map((theme) =>
+      theme.id === id
+        ? {
+            ...theme,
+            ...payload,
+            tokens: payload.tokens ?? theme.tokens,
+            typography: payload.typography ?? theme.typography,
+            mode: payload.mode ?? theme.mode,
+          }
+        : theme,
+    )
+    set({ customThemes })
+    await persistThemePreferences({
+      themeLibrary: serializeThemeLibrary(customThemes),
+    })
+    if (state.activeThemeId === id) {
+      const updated = customThemes.find((theme) => theme.id === id)
+      if (updated) {
+        set({ themeMode: updated.mode })
+        applyThemeProfile(updated)
+        await persistThemePreferences({
+          themeActiveId: updated.id,
+          themeMode: updated.mode,
+        })
+      }
+    }
+  },
+  async deleteTheme(id) {
+    const state = get()
+    const customThemes = state.customThemes.filter((theme) => theme.id !== id)
+    set({ customThemes })
+    await persistThemePreferences({
+      themeLibrary: serializeThemeLibrary(customThemes),
+    })
+    if (state.activeThemeId === id) {
+      const fallback = getDefaultThemeForMode(state.themeMode ?? 'light')
+      set({ activeThemeId: fallback.id, themeMode: fallback.mode })
+      applyThemeProfile(fallback)
+      await persistThemePreferences({
+        themeActiveId: fallback.id,
+        themeMode: fallback.mode,
+      })
+    }
+  },
+  async duplicateTheme(id, name) {
+    const state = get()
+    const source = getAllThemes(state.customThemes).find((theme) => theme.id === id)
+    if (!source) {
+      return undefined
+    }
+    const copy = createThemeFromBase(source, {
+      id: nanoid(),
+      name: name ?? `${source.name} copy`,
+      isBuiltin: false,
+    })
+    const customThemes = [...state.customThemes, copy]
+    set({ customThemes })
+    await persistThemePreferences({
+      themeLibrary: serializeThemeLibrary(customThemes),
+    })
+    return copy
   },
   markSetupComplete() {
     set({ needsSetup: false })

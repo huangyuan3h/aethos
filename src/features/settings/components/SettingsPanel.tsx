@@ -72,9 +72,17 @@ export function SettingsPanel() {
                   className={cn(
                     'w-full rounded-xl border border-transparent px-3 py-2 text-left text-sm transition',
                     view === section.id
-                      ? 'border-primary/40 bg-primary/10 text-primary-foreground'
+                      ? 'text-[hsl(var(--active-foreground))]'
                       : 'hover:border-border/80 hover:bg-card',
                   )}
+                  style={
+                    view === section.id
+                      ? {
+                          borderColor: 'hsl(var(--active))',
+                          backgroundColor: 'hsla(var(--active), 0.15)',
+                        }
+                      : undefined
+                  }
                 >
                   <p className="font-medium">{section.label}</p>
                   <p className="text-xs text-muted-foreground">{section.description}</p>
