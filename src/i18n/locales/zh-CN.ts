@@ -51,7 +51,17 @@ export const zhCN = {
       saveButton: '保存更改',
     },
     theme: {
-      description: '主题自定义功能即将上线。',
+      description: '统一管理整个工作区的外观与字体。',
+      presets: {
+        title: '预设主题',
+        description: '在适合明暗环境的精选配色之间切换。',
+      },
+      custom: {
+        title: '自定义颜色',
+        description: '覆盖任意色板，精细调整背景、文字与操作按钮。',
+        reset: '恢复预设',
+      },
+      saveButton: '保存主题',
     },
     providers: {
       addTitle: '新增提供商',

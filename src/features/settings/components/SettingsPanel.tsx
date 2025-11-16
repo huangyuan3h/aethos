@@ -9,6 +9,7 @@ import { McpSettings } from '@/features/mcp/components/McpSettings'
 import { cn } from '@/lib/utils'
 import { GeneralSettings } from './GeneralSettings'
 import { useI18n } from '@/i18n/I18nProvider'
+import { ThemeSettings } from './ThemeSettings'
 
 export function SettingsPanel() {
   const isOpen = useSettingsStore((state) => state.isSettingsOpen)
@@ -95,15 +96,7 @@ export function SettingsPanel() {
           {view === 'general' ? (
             <GeneralSettings />
           ) : view === 'theme' ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>{t('settings.nav.theme.label')}</CardTitle>
-                <CardDescription>{t('settings.theme.description')}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">{t('settings.theme.description')}</p>
-              </CardContent>
-            </Card>
+            <ThemeSettings />
           ) : view === 'providers' ? (
             <div className="grid gap-6 lg:grid-cols-[360px,1fr]">
               <Card className="h-fit">

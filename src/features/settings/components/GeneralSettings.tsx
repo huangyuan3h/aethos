@@ -21,7 +21,6 @@ const LANGUAGE_OPTIONS = [
 
 export function GeneralSettings() {
   const language = usePreferencesStore((state) => state.language) ?? 'en'
-  const theme = usePreferencesStore((state) => state.theme) ?? 'light'
   const systemPrompt = usePreferencesStore((state) => state.systemPrompt) ?? ''
   const savePreferences = usePreferencesStore((state) => state.savePreferences)
 
@@ -48,7 +47,6 @@ export function GeneralSettings() {
     try {
       await savePreferences({
         language: selectedLanguage,
-        theme,
         systemPrompt: promptInput.trim() || undefined,
       })
       setHasChanges(false)

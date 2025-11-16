@@ -53,7 +53,17 @@ export const frFR = {
       saveButton: 'Enregistrer',
     },
     theme: {
-      description: 'La personnalisation du thème arrive bientôt.',
+      description: 'Contrôlez l’apparence et la typographie de tout l’espace.',
+      presets: {
+        title: 'Thèmes rapides',
+        description: 'Passez d’un jeu de couleurs clair ou sombre en un clic.',
+      },
+      custom: {
+        title: 'Couleurs personnalisées',
+        description: 'Remplacez chaque variable pour ajuster surfaces, texte et actions.',
+        reset: 'Réinitialiser',
+      },
+      saveButton: 'Enregistrer le thème',
     },
     providers: {
       addTitle: 'Ajouter un fournisseur',

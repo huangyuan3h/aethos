@@ -50,7 +50,17 @@ export const en = {
       saveButton: 'Save changes',
     },
     theme: {
-      description: 'Theme customization will be available in a future update.',
+      description: 'Control appearance and typography for the entire workspace.',
+      presets: {
+        title: 'Quick themes',
+        description: 'Switch between curated palettes for light and dark environments.',
+      },
+      custom: {
+        title: 'Custom colors',
+        description: 'Override any token to tailor surfaces, text, and actions.',
+        reset: 'Reset overrides',
+      },
+      saveButton: 'Save theme',
     },
     providers: {
       addTitle: 'Add provider',

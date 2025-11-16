@@ -5,6 +5,8 @@ import { useOnboardingStore } from '@/features/onboarding/state/onboarding.store
 import { useSettingsStore } from '@/features/settings/state/settings.store'
 import { ProviderForm } from '@/features/settings/components/ProviderForm'
 import { Button } from '@/components/ui/button'
+import { getDefaultPresetForMode } from '@/features/preferences/theme/presets'
+import type { ThemeMode } from '@/features/preferences/theme/types'
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -12,10 +14,15 @@ const LANGUAGES = [
   { code: 'fr-FR', label: 'Français' },
 ] as const
 
-const THEMES = [
-  { id: 'light', label: 'Light' },
-  { id: 'dark', label: 'Dark' },
-] as const
+const DEFAULT_THEME_CHOICES = ['light', 'dark'].map((mode) => {
+  const preset = getDefaultPresetForMode(mode as ThemeMode)
+  return {
+    mode: preset.mode,
+    label: preset.label,
+    description: preset.description,
+    preset,
+  }
+})
 
 export function OnboardingWizard() {
   const isOpen = useOnboardingStore((state) => state.isOpen)
@@ -28,7 +35,7 @@ export function OnboardingWizard() {
 
   const [step, setStep] = useState(0)
   const [language, setLanguage] = useState<'en' | 'zh-CN' | 'fr-FR'>('en')
-  const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  const [theme, setTheme] = useState<ThemeMode>('light')
   const applyLanguage = usePreferencesStore((state) => state.applyLanguage)
   const applyTheme = usePreferencesStore((state) => state.applyTheme)
 
@@ -37,7 +44,13 @@ export function OnboardingWizard() {
   }
 
   const handlePreferencesComplete = async () => {
-    await savePreferences({ language, theme, systemPrompt: undefined })
+    const preset = getDefaultPresetForMode(theme)
+    await savePreferences({
+      language,
+      themeMode: theme,
+      themePreset: preset.id,
+      customTheme: {},
+    })
   }
 
   const handleFinish = async () => {
@@ -98,17 +111,17 @@ export function OnboardingWizard() {
             description="Pick the default look and feel. You can switch later."
           >
             <div className="grid grid-cols-2 gap-4">
-              {THEMES.map((option) => (
+              {DEFAULT_THEME_CHOICES.map((option) => (
                 <button
-                  key={option.id}
-                  className={`rounded-2xl border p-4 text-left ${theme === option.id ? 'border-primary bg-primary/10' : 'border-border'}`}
+                  key={option.preset.id}
+                  className={`rounded-2xl border p-4 text-left ${theme === option.mode ? 'border-primary bg-primary/10' : 'border-border'}`}
                   onClick={() => {
-                    const nextTheme = option.id as 'light' | 'dark'
-                    setTheme(nextTheme)
-                    applyTheme(nextTheme)
+                    setTheme(option.mode)
+                    applyTheme({ mode: option.mode, tokens: option.preset.tokens })
                   }}
                 >
                   <p className="text-lg font-semibold">{option.label}</p>
+                  <p className="text-xs text-muted-foreground">{option.description}</p>
                 </button>
               ))}
             </div>

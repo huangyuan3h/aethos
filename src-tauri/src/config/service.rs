@@ -69,9 +69,13 @@ impl From<ProviderRow> for ProviderSummary {
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct UserPreferences {
     pub language: Option<String>,
     pub theme: Option<String>,
+    pub theme_mode: Option<String>,
+    pub theme_preset: Option<String>,
+    pub theme_custom: Option<String>,
     pub system_prompt: Option<String>,
 }
 
@@ -185,9 +189,13 @@ pub struct McpServerUpsert {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PreferencesUpdate {
     pub language: Option<String>,
     pub theme: Option<String>,
+    pub theme_mode: Option<String>,
+    pub theme_preset: Option<String>,
+    pub theme_custom: Option<String>,
     #[serde(default)]
     pub system_prompt: Option<String>,
 }
@@ -205,9 +213,16 @@ impl ConfigService {
     }
 
     pub async fn get_preferences(&self) -> Result<UserPreferences, ConfigError> {
+        let language = self.get_setting("ui.language").await?;
+        let theme_mode = self.get_setting("ui.themeMode").await?;
+        let legacy_theme = self.get_setting("ui.theme").await?;
+        let effective_theme = theme_mode.clone().or_else(|| legacy_theme.clone());
         Ok(UserPreferences {
-            language: self.get_setting("ui.language").await?,
-            theme: self.get_setting("ui.theme").await?,
+            language,
+            theme: effective_theme,
+            theme_mode,
+            theme_preset: self.get_setting("ui.themePreset").await?,
+            theme_custom: self.get_setting("ui.themeCustom").await?,
             system_prompt: self.get_setting("chat.systemPrompt").await?,
         })
     }
@@ -216,8 +231,19 @@ impl ConfigService {
         if let Some(language) = prefs.language {
             self.set_setting("ui.language", &language, false).await?;
         }
-        if let Some(theme) = prefs.theme {
+        if let Some(theme_mode) = prefs.theme_mode {
+            self.set_setting("ui.themeMode", &theme_mode, false).await?;
+            self.set_setting("ui.theme", &theme_mode, false).await?;
+        } else if let Some(theme) = prefs.theme {
             self.set_setting("ui.theme", &theme, false).await?;
+        }
+        if let Some(theme_preset) = prefs.theme_preset {
+            self.set_setting("ui.themePreset", &theme_preset, false)
+                .await?;
+        }
+        if let Some(theme_custom) = prefs.theme_custom {
+            self.set_setting("ui.themeCustom", &theme_custom, false)
+                .await?;
         }
         if let Some(prompt) = prefs.system_prompt {
             self.set_setting("chat.systemPrompt", &prompt, false)
